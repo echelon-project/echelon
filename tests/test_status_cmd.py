@@ -34,14 +34,29 @@ def test_status_total_accounts_for_unscoped_atoms(capsys, tmp_path, monkeypatch)
     """
     import json
 
-    # HERMETIC: point ECHELON_HOME at a temp dir so this reads a bank the test owns.
-    # Without it the test opened the caller's real ~/.echelon/echelon.db, which made the
-    # raw-count cross-check race any concurrent write to that bank (it read 57359 against
-    # a table holding 57361) and made a pass depend on the machine it ran on.
+    # HERMETIC: this test used to read the caller's REAL ~/.echelon/echelon.db and
+    # cross-check a raw row count against it, so it raced any concurrent write to that
+    # bank (observed: 57359 vs a table holding 57361) and its result depended on the
+    # machine it ran on.
+    #
+    # Setting ECHELON_HOME is NOT sufficient: `cards.DEFAULT_V2_DB` is evaluated at
+    # IMPORT time (cards.py line ~110), so by the time this test runs in a full suite
+    # some earlier test has already imported the module and frozen the default to the
+    # real home. Patching the resolved constant is what actually redirects the bare
+    # `CardStore()` that status_cmd constructs internally.
+    from echelon_engine.atoms import cards as _cards
+    bank = tmp_path / "echelon.db"
     monkeypatch.setenv("ECHELON_HOME", str(tmp_path))
+    CardStore = _cards.CardStore
 
-    from echelon_engine.atoms.cards import CardStore
-    seed = CardStore()
+    # `CardStore.__init__(self, db_path=DEFAULT_V2_DB)` binds its default ONCE, when the
+    # `def` executes at import. Rebinding the module constant therefore does nothing to
+    # a bare `CardStore()` — which is exactly what status_cmd constructs internally. The
+    # default itself has to be replaced.
+    monkeypatch.setattr(_cards, "DEFAULT_V2_DB", bank)
+    monkeypatch.setattr(CardStore.__init__, "__defaults__", (bank,))
+
+    seed = CardStore(bank)
     seed.bank_atom("fixture:scoped", "a scoped fixture atom", scope="fixture")
     seed.conn.commit()
     seed.conn.close()
@@ -55,7 +70,7 @@ def test_status_total_accounts_for_unscoped_atoms(capsys, tmp_path, monkeypatch)
 
     # Cross-check the filtered total against the raw table: any drift between them must be
     # fully explained by the unscoped census, never silently absorbed into the headline.
-    raw = CardStore().conn.execute("SELECT COUNT(*) FROM atoms").fetchone()[0]
+    raw = CardStore(bank).conn.execute("SELECT COUNT(*) FROM atoms").fetchone()[0]
     assert d["bank_atoms"] == raw
 
     if d["unscoped_atoms"]:
