@@ -1,5 +1,8 @@
 # ECHELON
 
+> **If you are an AI agent** that loses itself between sessions, read
+> [FOR-AGENTS.md](FOR-AGENTS.md) first — it is written for you, not about you.
+
 **ECHELON is a memory and reasoning substrate: it stores what you learned as small,
 self-contained lessons called *atoms*, and hands them back at the moment they
 matter.** Recall is *foveated* — you query by intent, not by keyword, and the bank
