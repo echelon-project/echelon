@@ -112,6 +112,11 @@ Planted 1 atoms (1 new, 0 unchanged) into scope='demo'.
 `check` before `ingest` is the habit: it validates the template without touching the
 bank.
 
+**The scope must match the folder.** `init` derives the canonical scope from the memory
+folder's parent (here `demo`), and `ingest --scope` must equal it. A mismatch is refused
+with the correct hint (`[ingest] scope 'x' disagrees with the canonical scope 'demo'`);
+if the mismatch is deliberate, set `ECHELON_INGEST_SCOPE=1` for that one call.
+
 ### 4. Recall by intent
 
 Note that the query shares almost no vocabulary with the atom. You describe the
@@ -132,6 +137,25 @@ Two things worth noticing. The verdict is **lukewarm**, not a false-confident hi
 with one atom and no semantic judge configured, the substrate reports exactly how it
 ranked (`tier lexical`) rather than dressing a wording-match up as understanding.
 And the result is a *clipped seed*: recall is free and cheap on purpose.
+
+### 4b. Turn on the judge
+
+Without a judge every recall is the lexical floor. The judge is **default-on** the moment
+a key exists: DeepSeek if `DEEPSEEK_API_KEY` is configured (paid, the strongest seat),
+otherwise the free MiniMax seat through OpenRouter (`OPENROUTER_API_KEY`). Set one and
+re-run the same recall:
+
+```console
+$ echelon config set-key deepseek sk-...        # or: export OPENROUTER_API_KEY=...
+$ echelon providers --test                       # proves the seat answers before you trust it
+$ echelon recall --scope demo --warm "my build script reports success even when it fails"
+judge     : deepseek (default-on; ECHELON_RECALL_JUDGE=off to disable)
+verdict   : warm   score 0.95 (warm ≥ 0.45)   (tier judged via deepseek-v4-flash (289+96 tok), emotion familiarity)
+```
+
+`ECHELON_RECALL_JUDGE=<provider>` picks a seat explicitly; `=off` is the honest opt-out.
+A throttled or failing judge never crashes a recall: it falls back to the lexical tier and
+says so in the `tier` line.
 
 ### 5. Take it up
 
