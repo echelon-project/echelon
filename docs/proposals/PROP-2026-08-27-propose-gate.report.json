@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "proposal": "PROP-2026-08-27-propose-gate",
+  "proposal_hash": "sha256:bf27aa8fa3b60aaa3d2b1db252d02c2f714ccb9ff3b5ebaaa76e99bfcd1d7158",
+  "verdict": "PROCEED",
+  "findings": [
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.DUP_WARN",
+      "evidence": "main at 0.5; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.TYPE_BUDGETS",
+      "evidence": "usages at 0.615; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.check",
+      "evidence": "checkpoint at 0.667; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.bind",
+      "evidence": "main at 0.5; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.resolve",
+      "evidence": "_resolve_scope at 0.7; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.verdict",
+      "evidence": "VERSION at 0.571; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "DUP-CANDIDATE",
+      "severity": "warning",
+      "entry": "introduces.main",
+      "evidence": "main at 1.0; why_not_reuse required",
+      "fix": "add why_not_reuse naming the candidate, or reuse it",
+      "acked": true
+    },
+    {
+      "rule": "CODE-CONTRACT-ABSENT",
+      "severity": "advisory",
+      "entry": "proposal",
+      "evidence": "contracts/code.json missing — orchestrator_only/frozen unknown",
+      "fix": "add contracts/code.json when the drawer ships (2e)"
+    },
+    {
+      "rule": "CONTRACTS-NOT-LOADED",
+      "severity": "warning",
+      "entry": "proposal",
+      "evidence": "contract drawer empty — projection skipped (visible, not silent)",
+      "fix": "seed contracts/ or ack",
+      "acked": true
+    }
+  ],
+  "resolved_edges": {
+    "scan_file": "echelon_engine/propose_scan.py:257",
+    "usages": "echelon_engine/propose_scan.py:287",
+    "rescan": "echelon_engine/propose_scan.py:349",
+    "lookup": "echelon_engine/propose_scan.py:369",
+    "similar": "echelon_engine/propose_scan.py:392",
+    "import_index": "echelon_engine/propose_scan.py:423",
+    "load": "echelon_engine/contracts.py:69",
+    "applicable": "echelon_engine/contracts.py:99",
+    "receipt": "echelon_engine/contracts.py:138",
+    "init": "echelon_engine/workcycle.py:204",
+    "room_path": "echelon_engine/workcycle.py:171",
+    "journal": "echelon_engine/workcycle.py:355",
+    "re": "stdlib",
+    "json": "stdlib",
+    "hashlib": "stdlib",
+    "subprocess": "stdlib",
+    "sys": "stdlib",
+    "argparse": "stdlib",
+    "pathlib.Path": "stdlib",
+    "fnmatch": "stdlib"
+  },
+  "applicable_contracts": [],
+  "deferred_to_bind": [],
+  "budget": {
+    "declared": {
+      "files": 5,
+      "loc": 1350,
+      "deps": 0,
+      "override_reason": "spec 2d §1 caps CODE at propose.py ≤420 + test_propose.py ≤300 + __main__.py +≤6; landed 458 code-only / 510 non-blank (propose.py) and 470 code-only / 503 non-blank (test_propose.py). propose.py: the 33 §3 rule ids × evidence/fix payload IS the gate's product (2b precedent: propose_scan declared 441 vs 400, accepted as dense-no-padding). test_propose.py: spec §5's own list (36 rule ids + pilot/semantic + CHG + never-raise ×4 preconditions + 7 bind rules + CLI exits + resolve + self-gate ≈ 52 tests) cannot fit 300 lines — the scan precedent is 297 lines for 20 tests; this suite carries 2.6× the mandated coverage. Declared loc 1350 covers the whole committed diff a bind would measure (~510+~503 code + ~6 wiring + ~330 proposal/report JSON, spec §5 requires them committed)"
+    },
+    "type_default": {
+      "files": 3,
+      "loc": 400,
+      "deps": 0
+    }
+  },
+  "base": "171286a57f832bd6be4db8316ec4dc0cc02b9d7d",
+  "mode": {
+    "similarity": "name-only"
+  },
+  "static_rules": "none — laws listed, verified by witness at bind/gate"
+}

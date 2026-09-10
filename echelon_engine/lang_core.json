@@ -1,0 +1,803 @@
+{
+  "schema": "language-core/1.0",
+  "description": "Trusted declarative extraction profiles. No eval, exec, plugin import or shell formulas. Add regex_balanced profiles without changing the engine.",
+  "rule_contract": {
+    "actions": [
+      "scope",
+      "reference",
+      "observation"
+    ],
+    "streams": [
+      "code",
+      "comments_masked"
+    ],
+    "groups": {
+      "name": "symbol/reference/property label",
+      "args": "opening argument delimiter",
+      "body": "opening scope delimiter",
+      "value": "observed expression",
+      "base": "inheritance candidate",
+      "method": "HTTP method"
+    },
+    "formulas": "Scope = regex header + balanced delimiters. Edge owner = smallest containing scope. Calls remain unresolved candidates. Capability = explicit map or format template using language/name only.",
+    "safety": "Rules are trusted local input; Python re has no timeout. Review custom patterns; source size is capped.",
+    "parameter_pattern": "Optional fullmatch regex with name, annotation, default and variadic groups; nonmatches keep raw signature and unknown requiredness."
+  },
+  "languages": {
+    "python": {
+      "backend": "python_ast",
+      "extensions": [
+        ".py"
+      ],
+      "effects": {
+        "authorization_candidate": [
+          "*authorize*",
+          "*permission*",
+          "*check_access*"
+        ],
+        "authentication_candidate": [
+          "*authenticate*",
+          "*login_required*"
+        ],
+        "validation_candidate": [
+          "*validate*",
+          "*full_clean*",
+          "*verify_signature*"
+        ],
+        "database_read_candidate": [
+          "*.query",
+          "*.filter",
+          "*.select",
+          "*.get"
+        ],
+        "database_write_candidate": [
+          "*.save",
+          "*.insert",
+          "*.update",
+          "*.delete",
+          "*.execute"
+        ],
+        "transaction_candidate": [
+          "*.atomic",
+          "*.transaction",
+          "*.commit",
+          "*.rollback"
+        ],
+        "network_candidate": [
+          "requests.*",
+          "httpx.*",
+          "urllib.request.*",
+          "*.fetch"
+        ],
+        "filesystem_candidate": [
+          "open",
+          "builtins.open",
+          "*.read_text",
+          "*.write_text",
+          "*.unlink"
+        ],
+        "process_candidate": [
+          "subprocess.*",
+          "os.system",
+          "os.popen"
+        ],
+        "dynamic_execution_candidate": [
+          "eval",
+          "exec",
+          "builtins.eval",
+          "builtins.exec"
+        ],
+        "deserialization_candidate": [
+          "pickle.*",
+          "yaml.load",
+          "marshal.loads"
+        ],
+        "logging_candidate": [
+          "logging.*",
+          "*.debug",
+          "*.info",
+          "*.warning",
+          "*.error"
+        ]
+      },
+      "formula": {
+        "description": "Native AST adapter preserves Python scopes and contracts; regex cannot replace its grammar.",
+        "nodes": [
+          "module",
+          "class",
+          "function",
+          "parameter",
+          "field",
+          "operation"
+        ],
+        "edges": [
+          "contains",
+          "calls",
+          "imports",
+          "accepts",
+          "returns",
+          "raises",
+          "branches",
+          "reads",
+          "writes",
+          "references_parameter"
+        ],
+        "capability": "Explicit path:qualname mapping, otherwise route or function-name proposal."
+      },
+      "limitations": [
+        "Static Python AST extraction has no runtime binding, whole-program taint or middleware proof."
+      ]
+    },
+    "php": {
+      "backend": "regex_balanced",
+      "extensions": [
+        ".php",
+        ".phtml"
+      ],
+      "lexical": {
+        "comments": [
+          "/\\*[\\s\\S]*?\\*/",
+          "//[^\\r\\n]*",
+          "\\#[^\\r\\n]*"
+        ],
+        "strings": [
+          "\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"",
+          "'(?:\\\\[\\s\\S]|[^'\\\\])*'"
+        ],
+        "brackets": [
+          [
+            "(",
+            ")"
+          ],
+          [
+            "[",
+            "]"
+          ],
+          [
+            "{",
+            "}"
+          ]
+        ]
+      },
+      "regions": {
+        "start_pattern": "<\\?(?:php\\b|=)",
+        "end_pattern": "\\?>",
+        "allow_unclosed": true
+      },
+      "effects": {
+        "validation_candidate": [
+          "*validat*",
+          "*verify*",
+          "*sanitize*",
+          "*filter_input*"
+        ],
+        "authorization_candidate": [
+          "*authoriz*",
+          "*permission*",
+          "*check_access*"
+        ],
+        "database_read_candidate": [
+          "*.query",
+          "*->query",
+          "*.find",
+          "*.findOne",
+          "*.select"
+        ],
+        "database_write_candidate": [
+          "*.save",
+          "*->save",
+          "*.insert",
+          "*.update",
+          "*.delete",
+          "*.execute",
+          "*->execute"
+        ],
+        "network_candidate": [
+          "fetch",
+          "axios.*",
+          "curl_exec",
+          "*http*"
+        ],
+        "filesystem_candidate": [
+          "fopen",
+          "file_get_contents",
+          "file_put_contents",
+          "fs.*"
+        ],
+        "dynamic_execution_candidate": [
+          "eval",
+          "exec",
+          "system",
+          "shell_exec"
+        ],
+        "logging_candidate": [
+          "console.*",
+          "*log*"
+        ]
+      },
+      "limitations": [
+        "Regex/balanced extraction is partial; not a PHP parser.",
+        "Heredoc/nowdoc, interpolated expressions, attributes and alternate control syntax are incomplete.",
+        "Dynamic variables, trait composition, includes and runtime dispatch are not resolved."
+      ],
+      "rules": [
+        {
+          "id": "php.function",
+          "action": "scope",
+          "pattern": "\\bfunction\\s*&?\\s*(?P<name>[A-Za-z_][\\w]*)\\s*(?P<args>\\()",
+          "node_type": "function",
+          "relation": "contains",
+          "arguments": [
+            "(",
+            ")"
+          ],
+          "body": [
+            "{",
+            "}"
+          ],
+          "body_gap": "\\s*(?::\\s*[^;{=]+)?\\s*",
+          "capability": "{language}:{name}"
+        },
+        {
+          "id": "php.class",
+          "action": "scope",
+          "pattern": "\\b(?P<kind>class|interface|trait|enum)\\s+(?P<name>[A-Za-z_][\\w]*)(?:\\s+extends\\s+(?P<base>[\\\\\\w]+))?(?:\\s+implements\\s+[\\\\\\w,\\s]+)?\\s*(?P<body>\\{)",
+          "node_type": "class",
+          "relation": "contains",
+          "body": [
+            "{",
+            "}"
+          ]
+        },
+        {
+          "id": "php.use",
+          "action": "reference",
+          "pattern": "\\buse\\s+(?P<name>[\\\\\\w]+)(?:\\s+as\\s+\\w+)?\\s*;",
+          "node_type": "external",
+          "relation": "imports"
+        },
+        {
+          "id": "php.include",
+          "action": "reference",
+          "pattern": "\\b(?:require|require_once|include|include_once)\\s*\\(?\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "external",
+          "relation": "imports"
+        },
+        {
+          "id": "php.call",
+          "action": "reference",
+          "pattern": "(?<![\\w$\\\\])(?P<name>\\$?[A-Za-z_\\\\][\\w\\\\]*(?:(?:->|::)[A-Za-z_]\\w*)*)\\s*\\(",
+          "node_type": "unresolved",
+          "relation": "calls",
+          "exclude_names": [
+            "if",
+            "for",
+            "foreach",
+            "while",
+            "switch",
+            "catch",
+            "function",
+            "isset",
+            "empty",
+            "array",
+            "echo",
+            "match",
+            "unset"
+          ]
+        },
+        {
+          "id": "php.return",
+          "action": "observation",
+          "pattern": "\\breturn\\b(?P<value>[^;\\n}]*)",
+          "relation": "returns"
+        },
+        {
+          "id": "php.throw",
+          "action": "observation",
+          "pattern": "\\bthrow\\s+(?P<value>[^;\\n}]+)",
+          "relation": "raises"
+        },
+        {
+          "id": "php.guard",
+          "action": "observation",
+          "pattern": "\\b(?P<name>if|while|switch|foreach)\\s*\\(",
+          "relation": "branches",
+          "arguments": [
+            "(",
+            ")"
+          ]
+        },
+        {
+          "id": "php.input",
+          "action": "reference",
+          "pattern": "(?P<name>\\$_(?:GET|POST|REQUEST|COOKIE|FILES|SERVER|SESSION))\\b",
+          "node_type": "boundary",
+          "relation": "reads_input"
+        },
+        {
+          "id": "php.output",
+          "action": "observation",
+          "pattern": "\\b(?P<name>echo|print)\\s+(?P<value>[^;\\n]+)",
+          "relation": "renders"
+        },
+        {
+          "id": "php.route",
+          "action": "reference",
+          "pattern": "\\bRoute::(?P<method>get|post|put|patch|delete|any)\\s*\\(\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "endpoint",
+          "relation": "registers_route"
+        }
+      ],
+      "parameter_pattern": "\\s*(?:(?P<annotation>[?\\\\\\w|&]+)\\s+)?&?\\s*(?P<variadic>\\.\\.\\.)?(?P<name>\\$\\w+)(?:\\s*=\\s*(?P<default>[\\s\\S]*))?\\s*"
+    },
+    "html": {
+      "backend": "html",
+      "extensions": [
+        ".html",
+        ".htm",
+        ".php",
+        ".phtml"
+      ],
+      "exclude_regions": [
+        {
+          "start_pattern": "<\\?(?:php\\b|=)",
+          "end_pattern": "\\?>",
+          "lexical_language": "php",
+          "allow_unclosed": true
+        }
+      ],
+      "tag_name_pattern": "[A-Za-z][A-Za-z0-9:_-]*",
+      "void_tags": [
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr"
+      ],
+      "implicit_close_on_open": {
+        "li": [
+          "li"
+        ],
+        "p": [
+          "p",
+          "div",
+          "section",
+          "article",
+          "h1",
+          "h2",
+          "h3",
+          "ul",
+          "ol"
+        ],
+        "td": [
+          "td",
+          "th"
+        ],
+        "th": [
+          "td",
+          "th"
+        ],
+        "tr": [
+          "tr"
+        ],
+        "option": [
+          "option"
+        ]
+      },
+      "attribute_rules": [
+        {
+          "id": "html.id",
+          "attribute": "id",
+          "relation": "identifies",
+          "node_type": "dom_id"
+        },
+        {
+          "id": "html.class",
+          "attribute": "class",
+          "relation": "has_class",
+          "node_type": "css_class",
+          "split": true
+        },
+        {
+          "id": "html.src",
+          "attribute": "src",
+          "relation": "loads",
+          "node_type": "resource"
+        },
+        {
+          "id": "html.href",
+          "attribute": "href",
+          "relation": "links_to",
+          "node_type": "resource"
+        },
+        {
+          "id": "html.action",
+          "tag": "form",
+          "attribute": "action",
+          "relation": "submits_to",
+          "node_type": "endpoint"
+        },
+        {
+          "id": "html.label",
+          "attribute": "for",
+          "relation": "labels",
+          "node_type": "dom_id"
+        },
+        {
+          "id": "html.name",
+          "tag": "input",
+          "attribute": "name",
+          "relation": "accepts_field",
+          "node_type": "form_field"
+        }
+      ],
+      "embedded": [
+        {
+          "tag": "script",
+          "language": "javascript",
+          "allowed_types": [
+            "",
+            "module",
+            "text/javascript",
+            "application/javascript"
+          ]
+        },
+        {
+          "tag": "style",
+          "language": "css",
+          "allowed_types": [
+            "",
+            "text/css"
+          ]
+        }
+      ],
+      "limitations": [
+        "HTMLParser reports source structure, not browser DOM recovery or template execution.",
+        "Only common optional-end-tag cases are modeled.",
+        "Inline event attributes and template directives are recorded as attributes, not executed."
+      ]
+    },
+    "css": {
+      "backend": "regex_balanced",
+      "extensions": [
+        ".css"
+      ],
+      "lexical": {
+        "comments": [
+          "/\\*[\\s\\S]*?\\*/"
+        ],
+        "strings": [
+          "\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"",
+          "'(?:\\\\[\\s\\S]|[^'\\\\])*'"
+        ],
+        "brackets": [
+          [
+            "(",
+            ")"
+          ],
+          [
+            "[",
+            "]"
+          ],
+          [
+            "{",
+            "}"
+          ]
+        ]
+      },
+      "effects": {},
+      "limitations": [
+        "CSS rules and declarations are syntactic; cascade, specificity, inheritance and computed styles are not evaluated.",
+        "SCSS/Less and interpolation require additional profiles."
+      ],
+      "rules": [
+        {
+          "id": "css.rule",
+          "action": "scope",
+          "pattern": "(?:^|(?<=[{};]))\\s*(?P<name>[^{};]+?)\\s*(?P<body>\\{)",
+          "node_type": "style_rule",
+          "relation": "contains",
+          "body": [
+            "{",
+            "}"
+          ],
+          "capability": "css:{name}"
+        },
+        {
+          "id": "css.declaration",
+          "action": "observation",
+          "pattern": "(?:^|[;{])\\s*(?P<name>--[\\w-]+|[a-zA-Z-]+)\\s*:\\s*(?P<value>[^;{}]+)",
+          "relation": "declares_style"
+        },
+        {
+          "id": "css.import",
+          "action": "reference",
+          "pattern": "@import\\s+(?:url\\(\\s*)?[\\'\"](?P<name>[^\\'\"]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "resource",
+          "relation": "imports"
+        },
+        {
+          "id": "css.url",
+          "action": "reference",
+          "pattern": "\\burl\\(\\s*[\\'\"]?(?P<name>[^)\\'\"\\s]+)",
+          "stream": "comments_masked",
+          "node_type": "resource",
+          "relation": "loads"
+        },
+        {
+          "id": "css.variable",
+          "action": "reference",
+          "pattern": "\\bvar\\(\\s*(?P<name>--[\\w-]+)",
+          "node_type": "css_variable",
+          "relation": "reads"
+        }
+      ]
+    },
+    "javascript": {
+      "backend": "regex_balanced",
+      "extensions": [
+        ".js",
+        ".mjs",
+        ".cjs"
+      ],
+      "lexical": {
+        "comments": [
+          "/\\*[\\s\\S]*?\\*/",
+          "//[^\\r\\n]*"
+        ],
+        "strings": [
+          "\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"",
+          "'(?:\\\\[\\s\\S]|[^'\\\\])*'",
+          "`(?:\\\\[\\s\\S]|[^`\\\\])*`"
+        ],
+        "brackets": [
+          [
+            "(",
+            ")"
+          ],
+          [
+            "[",
+            "]"
+          ],
+          [
+            "{",
+            "}"
+          ]
+        ]
+      },
+      "effects": {
+        "validation_candidate": [
+          "*validat*",
+          "*verify*",
+          "*sanitize*",
+          "*filter_input*"
+        ],
+        "authorization_candidate": [
+          "*authoriz*",
+          "*permission*",
+          "*check_access*"
+        ],
+        "database_read_candidate": [
+          "*.query",
+          "*->query",
+          "*.find",
+          "*.findOne",
+          "*.select"
+        ],
+        "database_write_candidate": [
+          "*.save",
+          "*->save",
+          "*.insert",
+          "*.update",
+          "*.delete",
+          "*.execute",
+          "*->execute"
+        ],
+        "network_candidate": [
+          "fetch",
+          "axios.*",
+          "curl_exec",
+          "*http*"
+        ],
+        "filesystem_candidate": [
+          "fopen",
+          "file_get_contents",
+          "file_put_contents",
+          "fs.*"
+        ],
+        "dynamic_execution_candidate": [
+          "eval",
+          "exec",
+          "system",
+          "shell_exec"
+        ],
+        "logging_candidate": [
+          "console.*",
+          "*log*"
+        ]
+      },
+      "limitations": [
+        "Regex/balanced extraction is partial; not a JavaScript parser.",
+        "Template substitutions and regex literals are not parsed as executable syntax.",
+        "JSX and TypeScript require additional rules or a parser adapter.",
+        "Dynamic dispatch, closure binding, object methods and prototype behavior are not resolved.",
+        "Expression-bodied arrows, single-parameter arrows, anonymous callbacks and destructuring are incomplete; enclosing-scope attribution can be approximate."
+      ],
+      "rules": [
+        {
+          "id": "js.function",
+          "action": "scope",
+          "pattern": "\\b(?:async\\s+)?function\\s*\\*?\\s*(?P<name>[A-Za-z_$][\\w$]*)\\s*(?P<args>\\()",
+          "node_type": "function",
+          "relation": "contains",
+          "arguments": [
+            "(",
+            ")"
+          ],
+          "body": [
+            "{",
+            "}"
+          ],
+          "body_gap": "\\s*(?::\\s*[^;{=]+)?\\s*",
+          "capability": "{language}:{name}"
+        },
+        {
+          "id": "js.arrow",
+          "action": "scope",
+          "pattern": "\\b(?:const|let|var)\\s+(?P<name>[A-Za-z_$][\\w$]*)\\s*=\\s*(?:async\\s+)?(?P<args>\\()",
+          "node_type": "function",
+          "relation": "contains",
+          "arguments": [
+            "(",
+            ")"
+          ],
+          "body": [
+            "{",
+            "}"
+          ],
+          "body_gap": "\\s*=>\\s*",
+          "capability": "{language}:{name}"
+        },
+        {
+          "id": "js.class",
+          "action": "scope",
+          "pattern": "\\bclass\\s+(?P<name>[A-Za-z_$][\\w$]*)(?:\\s+extends\\s+(?P<base>[\\w$.]+))?\\s*(?P<body>\\{)",
+          "node_type": "class",
+          "relation": "contains",
+          "body": [
+            "{",
+            "}"
+          ]
+        },
+        {
+          "id": "js.method",
+          "action": "scope",
+          "pattern": "(?:^|[;{}])\\s*(?:static\\s+)?(?:async\\s+)?(?P<name>[A-Za-z_$][\\w$]*)\\s*(?P<args>\\()",
+          "node_type": "function",
+          "relation": "contains",
+          "arguments": [
+            "(",
+            ")"
+          ],
+          "body": [
+            "{",
+            "}"
+          ],
+          "body_gap": "\\s*(?::\\s*[^;{=]+)?\\s*",
+          "capability": "{language}:{name}",
+          "exclude_names": [
+            "if",
+            "for",
+            "while",
+            "switch",
+            "catch",
+            "with",
+            "function"
+          ]
+        },
+        {
+          "id": "js.import",
+          "action": "reference",
+          "pattern": "\\bimport\\s+(?:[^;\\n]*?\\s+from\\s+)?[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "external",
+          "relation": "imports"
+        },
+        {
+          "id": "js.require",
+          "action": "reference",
+          "pattern": "\\brequire\\s*\\(\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "external",
+          "relation": "imports"
+        },
+        {
+          "id": "js.call",
+          "action": "reference",
+          "pattern": "(?<![\\w$])(?P<name>[A-Za-z_$][\\w$]*(?:(?:\\?\\.)?\\.[A-Za-z_$][\\w$]*)*)\\s*\\(",
+          "node_type": "unresolved",
+          "relation": "calls",
+          "exclude_names": [
+            "if",
+            "for",
+            "while",
+            "switch",
+            "catch",
+            "with",
+            "function",
+            "super",
+            "import"
+          ]
+        },
+        {
+          "id": "js.return",
+          "action": "observation",
+          "pattern": "\\breturn\\b(?P<value>[^;\\n}]*)",
+          "relation": "returns"
+        },
+        {
+          "id": "js.throw",
+          "action": "observation",
+          "pattern": "\\bthrow\\s+(?P<value>[^;\\n}]+)",
+          "relation": "raises"
+        },
+        {
+          "id": "js.guard",
+          "action": "observation",
+          "pattern": "\\b(?P<name>if|while|switch)\\s*\\(",
+          "relation": "branches",
+          "arguments": [
+            "(",
+            ")"
+          ]
+        },
+        {
+          "id": "js.await",
+          "action": "observation",
+          "pattern": "\\bawait\\s+(?P<value>[\\w$.]+)",
+          "relation": "awaits"
+        },
+        {
+          "id": "js.fetch",
+          "action": "reference",
+          "pattern": "\\bfetch\\s*\\(\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "endpoint",
+          "relation": "requests",
+          "attributes": {
+            "method": "UNKNOWN"
+          }
+        },
+        {
+          "id": "js.route",
+          "action": "reference",
+          "pattern": "\\b(?:app|router)\\.(?P<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "endpoint",
+          "relation": "registers_route"
+        },
+        {
+          "id": "js.dom",
+          "action": "reference",
+          "pattern": "\\b(?:getElementById|querySelector|querySelectorAll)\\s*\\(\\s*[\\'\"](?P<name>[^\\'\"\\n]+)[\\'\"]",
+          "stream": "comments_masked",
+          "node_type": "selector",
+          "relation": "selects"
+        }
+      ],
+      "parameter_pattern": "\\s*(?P<variadic>\\.\\.\\.)?(?P<name>[A-Za-z_$][\\w$]*)(?:\\s*=\\s*(?P<default>[\\s\\S]*))?\\s*"
+    }
+  }
+}

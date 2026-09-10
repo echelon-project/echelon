@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+_tooling/
+
+# Test-run debris: some suites write a checkpoint or a scratch bank into cwd
+checkpoint*.json
+nonexistent-dir-*/
+*.db
+*.db-wal
+*.db-shm
+
+# The bank and local state are never committed
+.echelon/
+
+# Internal gate evidence, never published
+EXPORT-MANIFEST.md

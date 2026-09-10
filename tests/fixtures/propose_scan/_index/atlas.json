@@ -1,0 +1,64 @@
+{
+ "_block": "atlas.json",
+ "_harvested": "2026-08-22",
+ "tokens": {
+  "_source": "docs/component-atlas/tokens.json",
+  "_version": "1.0",
+  "type_scale": [
+   {
+    "name": "kpi",
+    "css_var": "--sz-kpi",
+    "value": "28px / weight 700",
+    "use": "the one focal number on a card"
+   },
+   {
+    "name": "body",
+    "css_var": "--sz-body",
+    "value": "14px / weight 400",
+    "use": "labels, rows, prose"
+   }
+  ],
+  "palette": [
+   {
+    "name": "fg",
+    "css_var": "--txt",
+    "value": null,
+    "use": "primary text"
+   },
+   {
+    "name": "muted",
+    "css_var": "--muted",
+    "value": null,
+    "use": "secondary text, captions"
+   }
+  ]
+ },
+ "atlas_nodes": {
+  "_dir": "docs/component-atlas/nodes/",
+  "cards": [
+   {
+    "filename": "alpha-app.md",
+    "title": "alpha-app - Shopee seller dashboard"
+   },
+   {
+    "filename": "page-ads.md",
+    "title": "Ads - campaign performance"
+   },
+   {
+    "filename": "page-cash.md",
+    "title": "Cash flow - money in/holding/out"
+   }
+  ]
+ },
+ "ime_category_prefixes": {
+  "_source": "D:/repos/engine-checkout/apps/flux/ime/materials/components.json",
+  "_count": 53,
+  "prefixes": {
+   "in": "input",
+   "tx": "text",
+   "bt": "button",
+   "sl": "select",
+   "ck": "check"
+  }
+ }
+}

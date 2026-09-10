@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echelon"
+# PEP 440 forbids a bare "-public" suffix; this is the first PUBLIC release,
+# cut from the private engine at 0.1.5 and renumbered to 0.1.0 for the public line.
+version = "0.1.0"
+description = "ECHELON — a memory + reasoning substrate: atoms as weight-adjustors, foveated recall, reflex vs think, and gates that make cheap models behave like expensive ones."
+readme = "README.md"
+requires-python = ">=3.10"          # union-type syntax (str | None) is used throughout
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Albert Tenggono", email = "albertteng78@gmail.com" }]
+keywords = ["memory", "agents", "llm", "recall", "substrate", "reflex"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# THE SUBSTRATE IS STDLIB. The bank is sqlite3, the HTTP is urllib.request, the
+# parsing is ast/json. There are NO required third-party dependencies: `pip install
+# echelon` gives you a working bank, recall, ingest, reflexes and wrap. Everything
+# below is an extra you opt into when you want that surface.
+dependencies = []
+
+[project.optional-dependencies]
+# Provider backends — each pulls only its own client.
+gemini = ["google-genai>=1.0"]
+http = ["httpx>=0.24"]                       # DeepSeek / Anthropic-upstream providers
+# The local HTTP surfaces (MCP over HTTP, the API proxy, the agent bridge).
+server = ["fastapi>=0.110", "uvicorn>=0.27", "starlette>=0.36",
+          "aiofiles>=24.0", "python-multipart>=0.0.9"]
+# Local embeddings for semantic recall (otherwise recall uses the lexical path).
+embed = ["sentence-transformers>=2.2", "torch>=2.0", "transformers>=4.30"]
+# Cross-scope atom mining.
+mine = ["numpy>=1.24"]
+# Rendered-evidence gates (a gate that looks at real pixels).
+gates = ["playwright>=1.40"]
+# Steering-file parsing.
+steering = ["PyYAML>=6.0"]
+# S3 archival of a bank snapshot.
+archive = ["boto3>=1.28"]
+
+[project.urls]
+Homepage = "https://github.com/echelon-project/echelon"
+Issues = "https://github.com/echelon-project/echelon/issues"
+
+[project.scripts]
+# After `pip install` the dispatcher is a real command, not a `python -m` incantation:
+#   echelon recall --warm "..."   /   echelon remember <slug>   /   echelon wrap
+# The console.py wrappers reconfigure stdout/stderr to UTF-8 on Windows (the pip .exe
+# wrappers cannot pass -X utf8, so the wrappers do it themselves).
+echelon = "echelon_engine.console:echelon_main"
+echelon-mcp = "echelon_engine.console:echelon_mcp_main"
+echelon-server = "echelon_engine.console:echelon_server_main"
+echelon-chat = "echelon_engine.console:echelon_chat_main"
+
+[tool.pytest.ini_options]
+# Serial by default so a bare `pytest` works on a fresh clone with no plugins.
+# Install pytest-xdist and pass `-n auto` for the parallel run.
+addopts = ""
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["echelon_engine*", "echelon_sdk*"]
+exclude = ["tests*", "_tooling*"]
+
+[tool.setuptools.package-data]
+echelon_engine = ["data/**/*", "lang_core.json"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-xdist>=3.5"]

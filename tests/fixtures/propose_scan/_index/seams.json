@@ -1,0 +1,62 @@
+{
+ "_block": "seams.json",
+ "_harvested": "2026-08-22 (post-heal: stock_hold whitelist extended with reconcile-* the same day)",
+ "_source": "module/dashboard.py :: class DashboardBoard",
+ "_base": "module._base.BoardBase (deps=[]); _gate() raises LadelouxError when gate != 'open'",
+ "_ungated": [
+  "registry",
+  "seed_db_if_empty",
+  "cache_freshness",
+  "today_wib",
+  "security_value",
+  "resolve_input_column"
+ ],
+ "methods": [
+  {
+   "method": "dashboard_summary",
+   "signature": "(year, month)",
+   "delegates_to": "services_dashboard.build_summary -> build_range_summary",
+   "returns_shape": "dict: profit-first month payload - KPIs, MoM deltas, today-pacing, waterfall, trend, top products",
+   "degradable": true
+  },
+  {
+   "method": "dashboard_summary_range",
+   "signature": "(start_date, end_date)",
+   "delegates_to": "services_dashboard.build_range_summary",
+   "returns_shape": "dict: build_summary minus month-only keys",
+   "degradable": true
+  },
+  {
+   "method": "dashboard_ads_campaigns",
+   "signature": "(start_date, end_date)",
+   "delegates_to": "services_dashboard.build_ads_campaigns",
+   "returns_shape": "dict {start_date,end_date,kpi:{spend,revenue,roas,acos,live},campaigns:[]}",
+   "degradable": false
+  },
+  {
+   "method": "dashboard_stock_signal",
+   "signature": "(kind, primary_days, lookback_days, by_variant=False, windows_7=False)",
+   "action_verbs": [
+    "dead",
+    "buffer",
+    "velocity"
+   ],
+   "returns_shape": "dead->list slow movers (TTL ~8s memo); buffer->per-SKU restock buffer; velocity->{start,end,skus:[{item_id,name,sold,revenue,cogs,margin,has_cost,sold_prev,delta}]}",
+   "degradable": false,
+   "_note": "velocity takes WIB date STRINGS in the two day args"
+  },
+  {
+   "method": "cached",
+   "signature": "(cache_key, use_cache=True)",
+   "delegates_to": "services_dashboard.get_cached_route",
+   "returns_shape": "dict precomputed route payload; rebuilds on miss/stale",
+   "degradable": false
+  }
+ ],
+ "_known_stubs_and_drift": [
+  "services_ads.sync_affiliate_conversion_chain - stub, Shopee blocks the call",
+  "services_push_dispatcher - per-code handlers are log-only stubs (Pass 1)",
+  "services.reviews reply_comment WRITE not wired (sibling board surface)",
+  "board docstring undercounts: telegram(+set-token,+dead-stock), retur(+decline,+get-note,+set-note), wishlist(+ask,+answer), loss_recovery(+refresh_cases), product_create(+upload_photo,+logistics,+size_charts,+probe_contract)"
+ ]
+}

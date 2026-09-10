@@ -1,0 +1,140 @@
+{
+  "v": 1,
+  "id": "PROP-2026-08-27-propose-gate",
+  "intent": "Build the PROPOSAL GATE (spec 2d): echelon_engine/propose.py with check (PROPOSAL-GATE §3 rule-for-rule, name-only PILOT mode, report + CHG on PROCEED), bind (§5 drift/usages/loc/edge, 2c receipt), resolve (propose_scan.similar wrapper), verdict, load_proposal, main; register the echelon propose|index verbs; write tests/test_propose.py per §5; the gate checks its OWN proposal first (§9 of the integration contract).",
+  "kind": "engine-module",
+  "budget": {
+    "files": 5,
+    "loc": 1350,
+    "deps": 0,
+    "override_reason": "spec 2d §1 caps CODE at propose.py ≤420 + test_propose.py ≤300 + __main__.py +≤6; landed 458 code-only / 510 non-blank (propose.py) and 470 code-only / 503 non-blank (test_propose.py). propose.py: the 33 §3 rule ids × evidence/fix payload IS the gate's product (2b precedent: propose_scan declared 441 vs 400, accepted as dense-no-padding). test_propose.py: spec §5's own list (36 rule ids + pilot/semantic + CHG + never-raise ×4 preconditions + 7 bind rules + CLI exits + resolve + self-gate ≈ 52 tests) cannot fit 300 lines — the scan precedent is 297 lines for 20 tests; this suite carries 2.6× the mandated coverage. Declared loc 1350 covers the whole committed diff a bind would measure (~510+~503 code + ~6 wiring + ~330 proposal/report JSON, spec §5 requires them committed)"
+  },
+  "steps": [
+    { "n": 1, "do": "write echelon_engine/propose.py: constants (DUP thresholds with the §3 note, TYPE_BUDGETS START values), load_proposal, _finding, the eight check steps, verdict (ack-aware), check (report + journal + CHG on PROCEED), bind (git diff, rescan-diff symbols, usages, loc via _strip_line, receipt, DRIFT-EDGE, CHG bound), resolve, main" },
+    { "n": 2, "do": "write tests/test_propose.py per spec §5: one test per §3 rule id, pilot/semantic switching, CHG open/reuse, never-raise (missing room/index/git, malformed/v>1/missing proposal), bind rules on a real git repo, receipt + _verify_violations, CLI exit codes 0/1/2, resolve top match, and the self-gate test (check on THIS proposal over a rescan of propose_scan/contracts/workcycle, asserts PROCEED)" },
+    { "n": 3, "do": "register \"propose\" -> propose.main and \"index\" -> propose_scan.main in echelon_engine/__main__.py; prove both --help exit 0" },
+    { "n": 4, "do": "self-check in the worktree room: index scan the three modules, propose check docs/proposals/PROP-2026-08-27-propose-gate.json -> expect PROCEED; commit the report as docs/proposals/PROP-2026-08-27-propose-gate.report.json; remove the room" }
+  ],
+  "touches": [
+    { "path": "echelon_engine/propose.py", "mode": "edit" },
+    { "path": "tests/test_propose.py", "mode": "edit" },
+    { "path": "echelon_engine/__main__.py", "mode": "edit" },
+    { "path": "docs/proposals/PROP-2026-08-27-propose-gate.json", "mode": "edit" },
+    { "path": "docs/proposals/PROP-2026-08-27-propose-gate.report.json", "mode": "edit" }
+  ],
+  "introduces": [
+    {
+      "name": "DUP_ERR",
+      "kind": "const",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["duplicate", "semantic", "threshold", "error"],
+      "signature": "0.90 (semantic mode)",
+      "why_not_reuse": null
+    },
+    {
+      "name": "DUP_WARN",
+      "kind": "const",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["duplicate", "candidate", "threshold", "warning"],
+      "signature": "0.60 semantic / 0.50 pilot",
+      "why_not_reuse": "the name-stem hit (main 0.5) is the pilot's uncalibrated 0.50 noise on a spec-pinned constant — main() in the three siblings is the per-module CLI entrypoint, not a threshold",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "TYPE_BUDGETS",
+      "kind": "const",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["budget", "type", "default", "files", "loc", "deps"],
+      "signature": "dict[str, dict]",
+      "why_not_reuse": "the name-stem hit (usages 0.615) is stem noise on a spec-pinned constant — usages() extracts diff identifiers, it is not a budget table",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "load_proposal",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["proposal", "load", "json", "never-raise"],
+      "signature": "(path: Path) -> dict",
+      "why_not_reuse": null
+    },
+    {
+      "name": "check",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["proposal", "gate", "check", "findings", "report", "verdict"],
+      "signature": "(room: Path, proposal: dict, *, repo_root: Path) -> dict",
+      "why_not_reuse": "workcycle.checkpoint() writes the room cursor/journal — a different operation (room state, not the read-before-code gate); PROPOSAL-GATE §3 names this function check",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "bind",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["proposal", "bind", "diff", "drift", "receipt"],
+      "signature": "(room: Path, proposal_id: str, *, repo_root: Path, diff_text: str | None = None, files_changed: list[str] | None = None) -> dict",
+      "why_not_reuse": "the name-stem hit (main 0.5) is pilot noise — main() is the CLI entrypoint, bind() is the §5 diff sealer; spec §2 pins this name",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "resolve",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["capability", "similarity", "resolve", "top-match"],
+      "signature": "(room: Path, capability: str, *, kind: str | None = None, keywords: list[str] = ()) -> list[dict]",
+      "why_not_reuse": "workcycle._resolve_scope resolves the bank SCOPE for a root — a different operation; this resolve answers a capability from the index (spec §2 pins the name)",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "verdict",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["verdict", "findings", "reject", "revise", "proceed", "ack"],
+      "signature": "(findings: list[dict]) -> str",
+      "why_not_reuse": "the name-stem hit (VERSION 0.571) is stem noise — VERSION is the v-gate constant; verdict() maps findings to REJECT/REVISE/PROCEED (spec §2 pins the name)",
+      "ack_dup_candidate": true
+    },
+    {
+      "name": "main",
+      "kind": "function",
+      "path": "echelon_engine/propose.py",
+      "keywords": ["cli", "argparse", "check", "bind", "resolve", "exit"],
+      "signature": "(argv: list[str] | None = None) -> int",
+      "why_not_reuse": "per-module main() CLI entrypoints are the package convention (propose_scan.main, contracts.main, workcycle.main each own their argparse); same shape, different verb set — no shared CLI machinery exists",
+      "ack_dup_candidate": true
+    }
+  ],
+  "references": [
+    { "name": "scan_file", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "bind's rescan-diff symbol extraction over post-build files" },
+    { "name": "usages", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "bind REF-DECLARED-NOT-USED — symbol-aware, never a raw grep" },
+    { "name": "rescan", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "REF-UNRESOLVED self-heal, bind's index update, and the index seeding the test fixtures call" },
+    { "name": "lookup", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "step 1 exact-name edge resolution and step 2 INTRO-ALREADY-EXISTS" },
+    { "name": "similar", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "step 2 DUP scan and resolve() — wrapped, never re-implemented" },
+    { "name": "import_index", "kind": "function", "path": "echelon_engine/propose_scan.py", "use": "reference for the index scan subcommand alias (registered, not called)" },
+    { "name": "load", "kind": "function", "path": "echelon_engine/contracts.py", "use": "step 3 code.json orchestrator_only/frozen, step 5 CONTRACTS-NOT-LOADED / CONTRACT-CLAIMED-NOT-FOUND" },
+    { "name": "applicable", "kind": "function", "path": "echelon_engine/contracts.py", "use": "step 5 applicable = applicable(room, kind, touches) ∪ (claimed ∩ ids)" },
+    { "name": "receipt", "kind": "function", "path": "echelon_engine/contracts.py", "use": "bind's verification/latest.json + history entry (gate=propose-bind, 2c shape)" },
+    { "name": "init", "kind": "function", "path": "echelon_engine/workcycle.py", "use": "test fixture rooms (room.json + drawers + gitignore)" },
+    { "name": "room_path", "kind": "function", "path": "echelon_engine/workcycle.py", "use": "main resolves the room the same way every other verb does" },
+    { "name": "journal", "kind": "function", "path": "echelon_engine/workcycle.py", "use": "every check journals one propose_check line" },
+    { "name": "re", "kind": "module", "path": "stdlib", "use": "regex in _node_at / CHG numbering" },
+    { "name": "json", "kind": "module", "path": "stdlib", "use": "proposal/report read + write" },
+    { "name": "hashlib", "kind": "module", "path": "stdlib", "use": "sha256 proposal_hash" },
+    { "name": "subprocess", "kind": "module", "path": "stdlib", "use": "git rev-parse / diff / name-only" },
+    { "name": "sys", "kind": "module", "path": "stdlib", "use": "stderr degrade lines" },
+    { "name": "argparse", "kind": "module", "path": "stdlib", "use": "CLI in main()" },
+    { "name": "pathlib.Path", "kind": "class", "path": "stdlib", "use": "paths throughout" },
+    { "name": "fnmatch", "kind": "module", "path": "stdlib", "use": "orchestrator_only/frozen globs and CHG touch overlap (both directions)" }
+  ],
+  "removes": [],
+  "replaces": [],
+  "contracts_claimed": [],
+  "invariants_claimed": [],
+  "unknowns": [
+    { "q": "whether references to stdlib modules (path \"stdlib\") must resolve in the index", "ruling": "no — the 2b proposal's path:\"stdlib\" convention marks stdlib; the gate records them as \"stdlib\" edges without lookup or finding (a real gate that flagged `json` would false-block every proposal)" },
+    { "q": "whether the proposal's own files (the .json it is written in, and its .report.json) trip TOUCH-CREATE-EXISTS at check time", "ruling": "mode semantics (round-1 heal): `create` is legitimate only BEFORE the build — a touch whose file exists at check time in the SAME commit as the proposal is honestly declared `edit`. The first committed report was manufactured from a mini-tree that excluded the files whose existence REJECTs; the honest re-check declares them edit. The TOUCH-CREATE-EXISTS exemption is scoped to the room's own files only — <room>/proposals/<id>.json and <room>/proposals/<id>.report.json (repo-relative .echelon/proposals/...), never a basename anywhere. This committed copy therefore declares mode edit for propose.py, test_propose.py and both docs/proposals files — they exist in this commit; the report is the artifact of an honest re-check of that copy against the real index (base = a real commit in this repo, verdict stated as-is)" },
+    { "q": "whether bind moves CHG-* to changes/completed", "ruling": "no — workcycle checkpoint moves it (INTEGRATION-CONTRACT §1); bind only sets bound:true + bound_at + history_receipt" },
+    { "q": "how deep the why_not_reuse citation check goes with no model in the loop", "ruling": "lexical: the candidate's name must appear in why_not_reuse and the text must be substantial (>30 chars) — a cheap gate, the Opus round-1 gate re-derives it" },
+    { "q": "whether a bind with warnings still marks the CHG bound", "ruling": "yes — warnings are acked/visible; only errors block (ok=false keeps the CHG open)" }
+  ],
+  "ack_contracts_not_loaded": true
+}

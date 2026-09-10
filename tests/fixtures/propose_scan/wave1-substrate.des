@@ -1,0 +1,60 @@
+# Wave 1 — substrate organs (C-ATLAS A01-A02; laws E_ATLAS H10, H13, H14)
+# First canvas of the echelon-agent estate. One organ proven end-to-end
+# before the batch: the clock (A02) — smallest surface, pure, law H14.
+
+organ clock {
+  "purpose": "One timezone-aware clock for the whole harness (E_ATLAS law H14). Every ledger timestamp flows through now(). Resolution order for the timezone name: the ECHELON_AGENT_TZ environment variable first, else the system local timezone. SPECIAL CASE (Windows-without-tzdata reality, law H10): the value 'UTC' compared case-insensitively resolves DIRECTLY to datetime.timezone.utc and never touches zoneinfo, so it is valid on every machine. Every other value is resolved via zoneinfo.ZoneInfo; ANY zoneinfo failure (ZoneInfoNotFoundError, KeyError, ImportError from a missing tzdata database) counts as INVALID and must not raise: it falls back to the system local timezone (datetime.now().astimezone() so the result is always tz-aware) and the module keeps a queryable record that a fallback happened. The resolved timezone object is cached after first resolution; reset_cache() clears the cache and the fallback record so tests and config reloads can re-resolve.",
+  "interface": {
+    "module_functions": [
+      {
+        "name": "now",
+        "signature": "now() -> datetime.datetime",
+        "contract": "returns the current time as an AWARE datetime (tzinfo is never None), in the resolved timezone; never raises, even when ECHELON_AGENT_TZ holds garbage"
+      },
+      {
+        "name": "get_timezone_name",
+        "signature": "get_timezone_name() -> str",
+        "contract": "returns the resolved timezone name string: when ECHELON_AGENT_TZ matches 'utc' case-insensitively the returned name is the CANONICAL uppercase 'UTC' — normalised, NOT echoed as given, so 'utc', 'Utc' and 'UTC' all yield exactly 'UTC'; when it names a zone zoneinfo.ZoneInfo can construct, the value is returned unchanged — UNCHANGED MEANS THE EXACT INPUT STRING ('America/Chicago' in -> 'America/Chicago' out; never str(ZoneInfo(...)), never tzname, never a case change except the UTC rule); otherwise the string reported by the system local timezone; cached after first call"
+      },
+      {
+        "name": "used_fallback",
+        "signature": "used_fallback() -> bool",
+        "contract": "True when the last resolution fell back because ECHELON_AGENT_TZ was set but invalid; False when unset or valid. RECORD-NOT-RESOLVER LAW (round-6 chronic kill): used_fallback NEVER triggers a resolution — it only READS the fallback record; immediately after reset_cache() it returns False even while the env holds garbage, and stays False until now()/get_timezone_name actually re-resolves"
+      },
+      {
+        "name": "reset_cache",
+        "signature": "reset_cache() -> None",
+        "contract": "clears the cached timezone and the fallback record; the next now()/get_timezone_name() call re-resolves from the environment"
+      }
+    ],
+    "notes": "stdlib only (datetime, os, zoneinfo, threading for a resolution lock) plus the tzdata package as the declared zone database on Windows. No file IO, no config-file read in v1 — the environment variable is the only input, so resolution can never cost latency on the hot path. MODULE-STATE LAW: the cache and the fallback record are MODULE-LEVEL variables, so every function that ASSIGNS to them must open with a `global` declaration naming all of them (a function that assigns without it creates a local and raises UnboundLocalError on the read that precedes the assignment). Prefer a single private resolver that does the assignment in one place. VALIDITY IS MACHINE-RELATIVE: a non-UTC zone name is valid iff zoneinfo.ZoneInfo(name) succeeds on this machine; counter-tests must therefore PROBE zoneinfo the same way (try ZoneInfo('America/Chicago') themselves and assert resolution when it succeeds, fallback when it raises) — never assume the zone database exists. UNCHANGED-SCOPE LAW (round-6 over-derivation): the unchanged-return claim may be tested ONLY with a zone name the test FIRST proves constructible via zoneinfo.ZoneInfo(name) (else pytest.skip) — never with invented shapes ('A+B', names with spaces, synthetic punctuation variants); a name ZoneInfo refuses is BY CONTRACT the fallback path, and at most TWO real-key unchanged tests are warranted (e.g. 'America/Chicago', 'Asia/Jakarta') — a combinatorial family of shape variants tests the test author's imagination, not the contract. NAME-VS-ABBREVIATION LAW (raw-smoke variance): get_timezone_name returns the IANA KEY (e.g. 'America/Chicago'), which is NOT what tzinfo.tzname(dt) returns (an abbreviation like 'CDT'/'CST') — counter-tests must never assert get_timezone_name() == now().tzinfo.tzname(...); the legal cross-check is str(now().tzinfo) or getattr(tzinfo, 'key', None) against the name. Likewise used_fallback/reset_cache tests must manipulate ECHELON_AGENT_TZ via os.environ AND call reset_cache() first — the cache makes an env change invisible without it."
+  },
+  "tier": "substrate"
+}
+
+organ boot_hardener {
+  "purpose": "Fix the interpreter environment before anything else imports (C-ATLAS A01; E_ATLAS laws H10, H13; donor hermes_bootstrap). Idempotent, and NO function in this module may ever raise out of apply_all() -- bootstrap must never crash an entry point: every internal failure is caught and recorded as a note. Three hardenings: (1) UTF-8: set the PYTHONUTF8 and PYTHONIOENCODING environment variables via setdefault (a user who set them keeps their values) and, when sys.stdout / sys.stderr expose reconfigure(), call reconfigure(errors='replace') so a cp1252 Windows console can never crash a print. (2) Import-path hardening: remove the empty string and '.' entries from sys.path so a project directory with a shadowing module name cannot hijack imports. (3) Idempotence: a module-level flag makes the second and later apply_all() calls no-ops that still return the first call's report.",
+  "interface": {
+    "module_functions": [
+      {
+        "name": "apply_all",
+        "signature": "apply_all() -> dict",
+        "contract": "IDEMPOTENCE IS THE FIRST LAW OF THIS FUNCTION: only the FIRST call in the process performs hardening and returns {'applied': True, 'notes': [...]}; the SECOND and every later call MUST perform nothing and MUST return {'applied': False, 'notes': <the stored first-call notes>} — the module keeps the applied flag and first report in module-level state; NEVER raises"
+      },
+      {
+        "name": "is_applied",
+        "signature": "is_applied() -> bool",
+        "contract": "True after the first apply_all() call in this process"
+      },
+      {
+        "name": "reset_for_tests",
+        "signature": "reset_for_tests() -> None",
+        "contract": "clears the applied flag and stored report so tests can exercise apply_all() again; does not undo environment changes"
+      }
+    ],
+    "notes": "stdlib only (sys, os). Must not import anything heavy. Must not remove absolute paths from sys.path -- only '' and '.'."
+  },
+  "tier": "substrate"
+}
+
+# test-set artifacts WITHDRAWN 2026-08-20: a test-set compiled through the

@@ -1,0 +1,44 @@
+{
+ "_block": "endpoints.json",
+ "_harvested": "2026-08-22",
+ "os_client_routes": {
+  "_permission_source": "os_client/route_permissions.py",
+  "_public_paths": [
+   "/login"
+  ],
+  "_public_prefixes": [
+   "/static/"
+  ]
+ },
+ "engine_wire_surface": {
+  "_source": "packages/os-engine/src/os_engine/http/app.py",
+  "_api_prefix": "/engine/v1",
+  "_auth": "X-Engine-Token (TOKEN mode when ENGINE_S2S_SECRET set) else legacy X-Engine-Grants / X-Engine-Basic; denial = structured 403 {error, capability, tier_required, reason}",
+  "endpoints": [
+   {
+    "method": "GET",
+    "path": "/health",
+    "capability": null,
+    "purpose": "liveness, stateless"
+   },
+   {
+    "method": "GET",
+    "path": "/engine/v1/capabilities",
+    "capability": null,
+    "purpose": "what this caller may call - fail fast, not mid-page 403"
+   },
+   {
+    "method": "POST",
+    "path": "/engine/v1/inventory/cogs-deltas",
+    "capability": "money/cogs",
+    "purpose": "FIFO allocation for many SKUs in one call"
+   },
+   {
+    "method": "POST",
+    "path": "/engine/v1/inventory/receive-po",
+    "capability": "inventory/receive-po",
+    "purpose": "landed-COGS allocation over the WHOLE PO"
+   }
+  ]
+ }
+}

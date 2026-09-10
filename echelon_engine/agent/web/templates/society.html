@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ECHELON · Society</title>
+<style>
+  :root{
+    --bg:#0c0d11; --panel:#15161d; --panel2:#1b1d27; --line:#272a36;
+    --txt:#eef1f8; --muted:#868ea2; --accent:#7af3b0; --warn:#ffd23f; --good:#5ee6c4;
+    --r:14px; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px}
+  header{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:rgba(12,13,17,.92);backdrop-filter:blur(8px);z-index:10}
+  header h1{font-size:15px;margin:0;letter-spacing:.4px;font-weight:600}
+  header h1 .dim{color:var(--muted);font-weight:400}
+  .live-dot{width:9px;height:9px;border-radius:50%;background:#444;display:inline-block;margin-right:6px;vertical-align:middle}
+  .live-dot.on{background:#36e07a;box-shadow:0 0 8px #36e07a;animation:pulse 1.4s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  select,button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:13px;cursor:pointer}
+  button:hover,select:hover{border-color:var(--accent)}
+  .spacer{flex:1}
+  .stat{color:var(--muted);font-size:12px;font-family:var(--mono)}
+  .stat b{color:var(--txt)}
+  main{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px;max-width:1500px;margin:0 auto}
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .card>.hd{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.5px;
+    text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .card>.hd b{color:var(--txt)}
+  /* lanes */
+  .lanes{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:12px}
+  .lane{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px 10px 14px;
+    position:relative;overflow:hidden;transition:border-color .3s}
+  .lane .stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .lane.active{border-color:#36e07a55}
+  .lane .row1{display:flex;align-items:baseline;gap:8px}
+  .lane .name{font-weight:600;font-size:13px}
+  .lane .turns{color:var(--muted);font-size:11px;font-family:var(--mono);margin-left:auto}
+  .lane .st{font-size:10px;text-transform:uppercase;letter-spacing:.6px;padding:1px 6px;border-radius:5px;
+    background:#2a2d3a;color:var(--muted)}
+  .lane.active .st{background:#15351f;color:#54e08a}
+  .lane .chan{color:var(--muted);font-size:11px;font-family:var(--mono);margin:5px 0 4px}
+  .lane .txt{font-size:12px;line-height:1.45;color:#cfd5e4;max-height:64px;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;white-space:pre-wrap;cursor:pointer}
+  /* channels */
+  .chans{padding:8px;display:flex;flex-direction:column;gap:2px;max-height:62vh;overflow:auto}
+  .chanrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+  .chanrow:hover{background:var(--panel2)}
+  .chanrow.sel{background:#1d2b24;outline:1px solid #2e5}
+  .chanrow .cn{font-family:var(--mono);color:#bcd}
+  .chanrow .ct{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:12px}
+  /* stream */
+  .stream{max-height:64vh;overflow:auto;padding:6px 0}
+  .msg{padding:9px 14px;border-bottom:1px solid #1c1e28}
+  .msg .mh{display:flex;align-items:baseline;gap:8px;font-size:12px;margin-bottom:3px}
+  .msg .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .msg .sndr{font-weight:600}
+  .msg .arr{color:var(--muted)}
+  .msg .ch{color:var(--muted);font-family:var(--mono);font-size:11px}
+  .msg .sq{margin-left:auto;color:#5a6175;font-family:var(--mono);font-size:11px}
+  .msg .body{font-size:13px;line-height:1.5;color:#d6dcec;white-space:pre-wrap;word-break:break-word}
+  .msg .body.clamp{max-height:88px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);cursor:pointer}
+  /* findings + soul */
+  .find{max-height:40vh;overflow:auto;padding:6px 0}
+  .fitem{padding:8px 12px;border-bottom:1px solid #1c1e28;font-size:12px;line-height:1.4}
+  .fitem .meta{color:var(--muted);font-size:11px;font-family:var(--mono);display:flex;gap:8px;margin-bottom:3px}
+  .badge{font-size:10px;padding:1px 5px;border-radius:4px;background:#2a2d3a;color:var(--muted)}
+  .badge.conf{background:#15351f;color:#54e08a}
+  .badge.lie{background:#3a1f1f;color:#e08a8a}
+  .cv{padding:8px 12px;border-bottom:1px solid #1c1e28;font-size:12px;line-height:1.45;color:#cfd5e4}
+  .cv .k{color:var(--accent);font-family:var(--mono);font-size:11px;margin-right:6px}
+  .bars{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .bar .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;font-family:var(--mono)}
+  .bar .track{height:7px;background:#222530;border-radius:4px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,#35d0ff,#7af3b0)}
+  .logo{padding:12px;text-align:center}
+  .logo img{max-width:100%;border-radius:10px;background:#fff1}
+  .logo .cap{color:var(--muted);font-size:11px;margin-top:6px}
+  .empty{padding:24px;text-align:center;color:var(--muted)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="dim">ECHELON ·</span> Society <span id="liveBadge"></span></h1>
+  <select id="runSel" title="pick a run"></select>
+  <button id="allChan">all channels</button>
+  <div class="spacer"></div>
+  <span class="stat" id="hdStats"></span>
+</header>
+
+<main>
+  <div class="col">
+    <div class="card">
+      <div class="hd">Role devices <b id="laneN">0</b> <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— each a lane; its text is its latest bus post (click to expand)</span></div>
+      <div class="lanes" id="lanes"></div>
+    </div>
+    <div class="card">
+      <div class="hd">Bus stream <b id="streamLabel">all channels</b>
+        <span class="spacer" style="flex:1"></span>
+        <span class="stat" id="streamCount"></span></div>
+      <div class="stream" id="stream"><div class="empty">loading…</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <div class="hd">Budget &amp; growth</div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <div class="hd">Channels <b id="chanN">0</b></div>
+      <div class="chans" id="chans"></div>
+    </div>
+    <div class="card" id="brandCard" style="display:none">
+      <div class="hd">Brand mark</div>
+      <div class="logo" id="brand"></div>
+    </div>
+    <div class="card">
+      <div class="hd">Findings <b id="findN">0</b> <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">→ L2 (unconfirmed = a lie)</span></div>
+      <div class="find" id="find"></div>
+    </div>
+    <div class="card">
+      <div class="hd">Cloud soul <b id="cvN">0</b> CVs <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— promoted canon only</span></div>
+      <div id="soul"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let RUN = null;          // current run name
+let SINCE = 0;           // last bus seq we've fetched
+let CHANNEL = null;      // selected channel filter (null = all)
+let MSGS = [];           // accumulated messages (current filter)
+let LIVE = false;
+let timer = null;
+
+function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function ago(ts){const d=Date.now()/1000-ts; if(d<60)return Math.floor(d)+'s'; if(d<3600)return Math.floor(d/60)+'m'; return Math.floor(d/3600)+'h';}
+
+async function loadRuns(){
+  const r = await fetch('/api/society/runs').then(x=>x.json());
+  const sel = $('#runSel'); sel.innerHTML='';
+  (r.runs||[]).forEach(run=>{
+    const o=document.createElement('option'); o.value=run.name;
+    o.textContent=`${run.name}  ·  ${run.messages} msgs${run.live?'  ● LIVE':''}`;
+    sel.appendChild(o);
+  });
+  if(!RUN) RUN = r.active;
+  sel.value = RUN;
+}
+
+function renderLanes(lanes){
+  $('#laneN').textContent = lanes.length;
+  $('#lanes').innerHTML = lanes.map(l=>`
+    <div class="lane ${l.status==='active'?'active':''}">
+      <div class="stripe" style="background:${esc(l.accent)}"></div>
+      <div class="row1"><span class="name" style="color:${esc(l.accent)}">${esc(l.name)}</span>
+        <span class="st">${esc(l.status)}</span>
+        <span class="turns">×${l.turns}</span></div>
+      <div class="chan">→ ${esc(l.channel)} · ${ago(l.ts)} ago</div>
+      <div class="txt" title="click to expand" onclick="this.style.webkitLineClamp=this.style.webkitLineClamp?'':'unset';this.style.maxHeight=this.style.maxHeight?'':'none'">${esc(l.text)}</div>
+    </div>`).join('');
+}
+
+function renderChans(chans){
+  $('#chanN').textContent = chans.length;
+  $('#chans').innerHTML = chans.map(c=>`
+    <div class="chanrow ${CHANNEL===c.channel?'sel':''}" data-ch="${esc(c.channel)}">
+      <span class="cn">${esc(c.channel)}</span><span class="ct">${c.count}</span></div>`).join('');
+  document.querySelectorAll('.chanrow').forEach(el=>el.onclick=()=>selectChannel(el.dataset.ch));
+}
+
+function renderBars(t){
+  const dsPct = t.deepseek_pool? Math.min(100, 100*t.deepseek_spent/t.deepseek_pool):0;
+  $('#bars').innerHTML = `
+    <div class="bar"><div class="lbl"><span>DeepSeek driver</span><span>$${t.deepseek_spent.toFixed(2)} / $${t.deepseek_pool.toFixed(0)}</span></div>
+      <div class="track"><div class="fill" style="width:${dsPct}%"></div></div></div>
+    <div class="bar"><div class="lbl"><span>xAI images</span><span>$${t.xai_spent.toFixed(3)}</span></div></div>
+    <div class="bar"><div class="lbl"><span>partner consults</span><span>${t.partner_consults} @ $0</span></div></div>
+    <div class="bar"><div class="lbl"><span>soul L2 added</span><span>${t.l2_added} · ${t.confirmed} confirmed</span></div></div>
+    <div class="bar"><div class="lbl"><span>growing</span><span>${t.growing_real_soul?'⚠ REAL soul':'clone (safe)'}</span></div></div>`;
+  $('#hdStats').innerHTML = `<b>${t.messages}</b> msgs · <b>${t.findings}</b> findings · <b>${t.confirmed}</b> confirmed · seq <b>${t.max_seq}</b>`;
+}
+
+function renderFindings(f){
+  $('#findN').textContent = f.total;
+  $('#find').innerHTML = (f.items||[]).slice(0,60).map(i=>`
+    <div class="fitem">
+      <div class="meta"><span style="color:${esc(({}[i.role]||'#9aa'))}">${esc(i.role)}</span>
+        <span>${esc(i.type)}</span>
+        <span class="badge ${i.confirmed?'conf':'lie'}">${i.confirmed?'confirmed':'lie'} · ▲${i.up_votes}</span></div>
+      ${esc((i.text||'').slice(0,260))}${(i.text||'').length>260?'…':''}</div>`).join('')
+    || '<div class="empty">no findings yet</div>';
+  // brand
+  if(f.brand && f.brand.length){
+    const best=f.brand[f.brand.length-1];
+    $('#brandCard').style.display='';
+    $('#brand').innerHTML = `<img src="/api/society/file?path=${encodeURIComponent(best.png)}" onerror="this.style.display='none'"/>
+      <div class="cap">iter ${best.iter} · brand-fit ${best.score}</div>`;
+  }
+}
+
+function renderSoul(s){
+  $('#cvN').textContent = s.cv_count;
+  $('#soul').innerHTML = (s.cvs||[]).map(c=>{
+    const m = c.match(/^\[?(CV-[\w-]+|WORLD-\d+)\]?\s*(.*)$/s);
+    const k = m?m[1]:'CV'; const body=m?m[2]:c;
+    return `<div class="cv"><span class="k">${esc(k)}</span>${esc(body.slice(0,220))}${body.length>220?'…':''}</div>`;
+  }).join('') || '<div class="empty">no CVs in cloud soul</div>';
+}
+
+function renderStream(){
+  const box=$('#stream');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = MSGS.slice(-400).map(m=>`
+    <div class="msg">
+      <div class="mh"><span class="dot" style="background:${esc(m.accent)}"></span>
+        <span class="sndr" style="color:${esc(m.accent)}">${esc(m.sender)}</span>
+        <span class="arr">→</span><span class="ch">${esc(m.channel)}</span>
+        <span class="sq">#${m.seq} · ${ago(m.ts)}</span></div>
+      <div class="body ${m.body.length>400?'clamp':''}" onclick="this.classList.toggle('clamp')">${esc(m.body)}</div>
+    </div>`).join('') || '<div class="empty">no messages on this channel</div>';
+  $('#streamCount').textContent = `${MSGS.length} shown`;
+  if(atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function refreshOverview(){
+  if(!RUN) return;
+  const o = await fetch('/api/society/overview?run='+encodeURIComponent(RUN)).then(x=>x.json());
+  if(o.error) return;
+  LIVE = o.live;
+  $('#liveBadge').innerHTML = `<span class="live-dot ${LIVE?'on':''}"></span><span class="stat">${LIVE?'live':'finished'}</span>`;
+  renderLanes(o.lanes);
+  renderChans(o.channels);
+  renderBars({...o.totals});
+  renderFindings(o.findings);
+  renderSoul(o.soul);
+}
+
+async function refreshMessages(){
+  if(!RUN) return;
+  const url = `/api/society/messages?run=${encodeURIComponent(RUN)}&since=${SINCE}`+(CHANNEL?`&channel=${encodeURIComponent(CHANNEL)}`:'');
+  const r = await fetch(url).then(x=>x.json());
+  if(r.error) return;
+  if(r.messages.length){ MSGS = MSGS.concat(r.messages); SINCE = r.since; renderStream(); }
+  LIVE = r.live;
+}
+
+function selectChannel(ch){
+  CHANNEL = (CHANNEL===ch)?null:ch;
+  $('#streamLabel').textContent = CHANNEL||'all channels';
+  MSGS=[]; SINCE=0; renderStream();
+  document.querySelectorAll('.chanrow').forEach(e=>e.classList.toggle('sel', e.dataset.ch===CHANNEL));
+  refreshMessages();
+}
+
+function switchRun(name){ RUN=name; CHANNEL=null; MSGS=[]; SINCE=0; $('#streamLabel').textContent='all channels';
+  refreshOverview(); refreshMessages(); }
+
+function tick(){
+  refreshMessages();
+  refreshOverview();           // lanes/cost/soul update too (cheap; idle runs barely change)
+}
+
+(async function init(){
+  await loadRuns();
+  $('#runSel').onchange = e=>switchRun(e.target.value);
+  $('#allChan').onclick = ()=>{ if(CHANNEL) selectChannel(CHANNEL); };
+  await refreshOverview();
+  await refreshMessages();
+  timer = setInterval(tick, 2000);   // follow live runs; idle-slim (only new seqs come back)
+})();
+</script>
+</body>
+</html>

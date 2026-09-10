@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ECHELON · Command Center</title>
+  <link rel="stylesheet" href="/static/command.css">
+  <script>
+    // set theme BEFORE first paint (no flash). Persisted in localStorage; defaults to dark.
+    (function () {
+      try {
+        var t = localStorage.getItem("ec-theme") || "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+    })();
+  </script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◇</span>
+    <span class="title">ECHELON</span>
+    <span class="subtitle">Command Center</span>
+  </div>
+  <div class="topstats" id="topstats">
+    <span class="stat" id="stat-live"><b>—</b> live</span>
+    <span class="stat" id="stat-total"><b>—</b> sessions</span>
+    <span class="stat" id="stat-cost"><b>$—</b> spent</span>
+  </div>
+  <div class="toplinks">
+    <button id="themeBtn" class="toplink theme-toggle" title="toggle light / dark"><span class="theme-icon"></span></button>
+    <a href="/society" class="toplink">Society</a>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT: session roster -->
+  <aside class="roster">
+    <div class="roster-head">
+      <span>Agents</span>
+      <div class="roster-head-btns">
+        <button id="newBtn" class="ghost primary" title="start a new session / society">+ New</button>
+        <button id="refreshBtn" class="ghost" title="refresh now">⟳</button>
+      </div>
+    </div>
+    <div class="roster-list" id="rosterList">
+      <div class="roster-empty">scanning bridges…</div>
+    </div>
+  </aside>
+
+  <!-- RIGHT: one live panel per OPEN agent -->
+  <main class="board" id="board">
+    <div class="board-empty" id="boardEmpty">
+      <div class="board-empty-art">◇</div>
+      <p>Pick an agent on the left to open its panel.</p>
+      <p class="muted">Each panel streams that agent's live steps and lets you reply, interject, or stop it — independently.</p>
+    </div>
+  </main>
+</div>
+
+<!-- New Session / Society composer (modal) -->
+<div id="composer" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="modal-tabs">
+        <button class="mtab active" data-tab="session">New Session</button>
+        <button class="mtab" data-tab="society">New Society</button>
+      </div>
+      <button class="modal-close" id="composerClose" title="close">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <label class="fld">
+        <span class="fld-l">Goal</span>
+        <textarea id="cGoal" rows="3" placeholder="one sentence — what should the agent(s) do?"></textarea>
+      </label>
+
+      <label class="fld">
+        <span class="fld-l">Workspace <span class="fld-hint">(where the agent acts — isolated by default)</span></span>
+        <input id="cRoot" type="text" placeholder="leave empty for a fresh scratch dir, or a path…" autocomplete="off">
+      </label>
+      <div id="cWsInfo" class="ws-info">no workspace → a fresh isolated scratch dir under ~/.echelon/work</div>
+
+      <!-- session-only: permission mode -->
+      <div class="fld" data-only="session">
+        <span class="fld-l">Mode</span>
+        <div class="mode-row" id="cMode">
+          <button class="mode-opt" data-mode="plan">plan</button>
+          <button class="mode-opt" data-mode="ask">ask</button>
+          <button class="mode-opt active" data-mode="auto">auto</button>
+          <button class="mode-opt" data-mode="bypass">bypass</button>
+        </div>
+      </div>
+
+      <!-- society-only: dry-run preview area -->
+      <div class="fld" data-only="society">
+        <span class="fld-l">Plan preview</span>
+        <div id="cWaves" class="waves-preview">click “Simulate” to preview the waves before launching</div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="cMsg" class="modal-msg"></span>
+      <button class="btn" id="cForce" data-only="" hidden>Force (use repo anyway)</button>
+      <button class="btn" id="cSimulate" data-only="society">Simulate</button>
+      <button class="btn btn-go" id="cLaunch">Launch</button>
+    </div>
+  </div>
+</div>
+
+<!-- floating, draggable, themed status card (scoped to one bridge) -->
+<div id="statusCard" class="status-card" hidden>
+  <div class="sc-head" id="scHead">
+    <span class="sc-grip">⠿</span>
+    <span class="sc-title" id="scTitle">status</span>
+    <span class="sc-state" id="scState"></span>
+    <button class="sc-pin" id="scPin" title="pin (stop following hover)">📌</button>
+    <button class="sc-close" id="scClose" title="close">✕</button>
+  </div>
+  <div class="sc-banner" id="scBanner"></div>
+  <div class="sc-grid" id="scGrid"></div>
+</div>
+
+<template id="panelTpl">
+  <section class="panel" data-bridge="">
+    <div class="panel-head">
+      <div class="panel-id">
+        <span class="dot"></span>
+        <span class="panel-name"></span>
+        <span class="panel-state"></span>
+      </div>
+      <div class="panel-meta">
+        <span class="panel-step">step 0</span>
+        <button class="panel-close" title="close panel">✕</button>
+      </div>
+    </div>
+    <div class="panel-feed"></div>
+    <div class="panel-ctl">
+      <input class="panel-input" type="text" placeholder="reply or interject this agent…" autocomplete="off">
+      <button class="btn btn-reply" title="answer the agent's open question">Reply</button>
+      <button class="btn btn-interject" title="steer mid-run without answering a question">Interject</button>
+      <button class="btn btn-stop" title="stop this agent">Stop</button>
+    </div>
+  </section>
+</template>
+
+<script>
+/* ECHELON Command Center — multi-agent operator console.
+   Wires to the real server API (no mocks):
+     GET  /api/bridges                      -> {sessions:[{name,state,step,events,mtime}], active}
+     GET  /api/events?bridge=NAME&since=N   -> {events:[{seq,t,kind,...}], since}
+     GET  /api/status?bridge=NAME           -> {alive,state,age,step,bridge}
+     GET  /api/costs                        -> {grand_total_usd, sessions:[...]}
+     POST /api/reply?bridge=NAME     {answer}
+     POST /api/interject?bridge=NAME {steer}
+     POST /api/stop?bridge=NAME
+   Each open panel polls ONLY its own bridge -> N agents watched + driven side by side. */
+(function () {
+  "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const board = $("#board"), boardEmpty = $("#boardEmpty"), rosterList = $("#rosterList");
+  const panels = new Map();           // bridge name -> {el, since, timer, feed}
+  const ROSTER_MS = 2000, FEED_MS = 1200;
+
+  // ---- event rendering -------------------------------------------------------
+  const KIND_LABEL = {
+    step: "STEP", act: "ACT", driver: "THINK", felt: "FELT", warmth: "WARMTH",
+    boot: "BOOT", env: "ENV", mode: "MODE", interject: "INTERJECT", ask: "ASK",
+    answered: "ANSWERED", blocked: "BLOCKED", finish: "FINISH", lesson: "LESSON",
+    conclusion: "DONE", progress_check: "CHECK", rewake: "REWAKE",
+  };
+  function eventLine(ev) {
+    const k = ev.kind || "event";
+    const row = document.createElement("div");
+    row.className = "ev ev-" + k;
+    const tag = document.createElement("span");
+    tag.className = "ev-tag";
+    tag.textContent = KIND_LABEL[k] || k.toUpperCase();
+    const body = document.createElement("span");
+    body.className = "ev-body";
+    body.textContent = summarize(ev);
+    row.appendChild(tag); row.appendChild(body);
+    return row;
+  }
+  function summarize(ev) {
+    // pick the most meaningful field per kind; fall back to a compact JSON of the extras
+    if (ev.tool) return ev.tool + (ev.args ? " " + clip(JSON.stringify(ev.args), 160) : "");
+    for (const key of ["text", "summary", "situation", "answer", "steer", "reason", "note", "verdict", "msg", "content"]) {
+      if (ev[key]) return clip(String(ev[key]), 400);
+    }
+    const { seq, t, kind, ...rest } = ev;
+    const keys = Object.keys(rest);
+    return keys.length ? clip(JSON.stringify(rest), 260) : "";
+  }
+  const clip = (s, n) => (s.length > n ? s.slice(0, n) + "…" : s);
+
+  // ---- roster ----------------------------------------------------------------
+  function stateClass(s) {
+    if (s === "running") return "s-running";
+    if (s === "completed" || s === "finish") return "s-done";
+    if (s === "stopped" || s === "blocked" || s === "error" || s === "timeout") return "s-stopped";
+    if (s === "idle") return "s-idle";
+    return "s-new";
+  }
+  async function refreshRoster() {
+    let data;
+    try { data = await (await fetch("/api/bridges")).json(); }
+    catch { rosterList.innerHTML = '<div class="roster-empty">server unreachable…</div>'; return; }
+    const sessions = data.sessions || [];
+    const live = sessions.filter(s => s.state === "running").length;
+    $("#stat-live").innerHTML = `<b>${live}</b> live`;
+    $("#stat-total").innerHTML = `<b>${sessions.length}</b> sessions`;
+    if (!sessions.length) { rosterList.innerHTML = '<div class="roster-empty">no bridges yet — dispatch an agent.</div>'; return; }
+    rosterList.innerHTML = "";
+    sessions.forEach(s => {
+      const item = document.createElement("button");
+      item.className = "roster-item" + (panels.has(s.name) ? " open" : "");
+      item.innerHTML =
+        `<span class="ri-dot ${stateClass(s.state)}"></span>` +
+        `<span class="ri-name">${escapeHtml(s.name)}</span>` +
+        `<span class="ri-badge ${stateClass(s.state)}">${escapeHtml(s.state)}</span>` +
+        `<span class="ri-meta">step ${s.step} · ${s.events} ev</span>`;
+      item.onclick = () => togglePanel(s.name);
+      // hover -> show the draggable status card for THIS session (unless pinned to another)
+      item.onmouseenter = () => showStatusCard(s.name, false);
+      rosterList.appendChild(item);
+    });
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  // ---- cost (separate cadence, cheap) ---------------------------------------
+  async function refreshCost() {
+    try {
+      const c = await (await fetch("/api/costs")).json();
+      const g = c.grand_total_usd ?? c.grand ?? 0;
+      $("#stat-cost").innerHTML = `<b>$${Number(g).toFixed(4)}</b> spent`;
+    } catch { /* leave prior value */ }
+  }
+
+  // ---- panels ----------------------------------------------------------------
+  function togglePanel(name) { panels.has(name) ? closePanel(name) : openPanel(name); }
+
+  function openPanel(name) {
+    boardEmpty.style.display = "none";
+    const node = $("#panelTpl").content.firstElementChild.cloneNode(true);
+    node.dataset.bridge = name;
+    $(".panel-name", node).textContent = name;
+    const feed = $(".panel-feed", node);
+    const input = $(".panel-input", node);
+    $(".panel-close", node).onclick = () => closePanel(name);
+    $(".btn-reply", node).onclick = () => sendControl(name, "reply", input);
+    $(".btn-interject", node).onclick = () => sendControl(name, "interject", input);
+    $(".btn-stop", node).onclick = () => stopAgent(name, node);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") sendControl(name, "reply", input); });
+    board.appendChild(node);
+    const rec = { el: node, since: 0, feed, timer: null };
+    panels.set(name, rec);
+    pumpFeed(name);                                   // immediate first paint
+    rec.timer = setInterval(() => pumpFeed(name), FEED_MS);
+    refreshRoster();
+  }
+  function closePanel(name) {
+    const rec = panels.get(name);
+    if (!rec) return;
+    clearInterval(rec.timer);
+    rec.el.remove();
+    panels.delete(name);
+    if (!panels.size && !originatePanels.size) boardEmpty.style.display = "";
+    refreshRoster();
+  }
+
+  // ---- originate runs: the LANDING PLACE (act from the bar -> watch in the board) ------------
+  // A backgrounded originate run_id becomes a board panel, same surface you steer agents in.
+  // Keyed "◆<rid>" so it never collides with a bridge name. The originate bar OWNS the polling
+  // and broadcasts ticks; the board just subscribes — neither feature reaches into the other.
+  const originatePanels = new Map();              // rid -> {feed, statusEl, stepEl, dotEl, shown}
+  function originateKey(rid) { return "◆" + rid; }
+
+  function openOriginatePanel(rid, cmd) {
+    if (originatePanels.has(rid)) {               // already open: just surface it
+      originatePanels.get(rid).feed.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    boardEmpty.style.display = "none";
+    const node = $("#panelTpl").content.firstElementChild.cloneNode(true);
+    node.dataset.bridge = originateKey(rid);
+    node.classList.add("panel-originate");
+    $(".panel-name", node).textContent = "◆ " + clip(cmd || "originate", 48);
+    const feed = $(".panel-feed", node), ctl = $(".panel-ctl", node);
+    if (ctl) ctl.remove();                        // originate runs aren't steerable — read-only
+    $(".panel-close", node).onclick = () => closeOriginatePanel(rid);
+    board.appendChild(node);
+    originatePanels.set(rid, {
+      feed, shown: 0,
+      statusEl: $(".panel-state", node), stepEl: $(".panel-step", node), dotEl: $(".dot", node),
+    });
+  }
+  function closeOriginatePanel(rid) {
+    const rec = originatePanels.get(rid);
+    if (!rec) return;
+    rec.feed.closest(".panel").remove();
+    originatePanels.delete(rid);
+    if (!panels.size && !originatePanels.size) boardEmpty.style.display = "";
+  }
+  document.addEventListener("echelon:originate-run", e => openOriginatePanel(e.detail.rid, e.detail.cmd));
+  document.addEventListener("echelon:originate-tick", e => {
+    const { rid, output, status, done } = e.detail;
+    const rec = originatePanels.get(rid);
+    if (!rec) return;
+    const out = String(output || "");
+    if (out.length > rec.shown) {
+      const atBottom = rec.feed.scrollHeight - rec.feed.scrollTop - rec.feed.clientHeight < 40;
+      const span = document.createElement("span");
+      span.className = "ev ev-originate";
+      span.textContent = out.slice(rec.shown);
+      rec.feed.appendChild(span);
+      rec.shown = out.length;
+      if (atBottom) rec.feed.scrollTop = rec.feed.scrollHeight;
+    }
+    const st = done ? (status || "done") : "running";
+    rec.statusEl.textContent = st;
+    rec.statusEl.className = "panel-state " + stateClass(st);
+    rec.dotEl.className = "dot " + stateClass(st);
+  });
+
+  async function pumpFeed(name) {
+    const rec = panels.get(name);
+    if (!rec) return;
+    // status first (so the header reflects liveness even with no new events)
+    try {
+      const st = await (await fetch(`/api/status?bridge=${encodeURIComponent(name)}`)).json();
+      const dot = $(".dot", rec.el), state = $(".panel-state", rec.el), step = $(".panel-step", rec.el);
+      dot.className = "dot " + stateClass(st.state);
+      state.textContent = st.state || "?";
+      state.className = "panel-state " + stateClass(st.state);
+      if (typeof st.step === "number") step.textContent = "step " + st.step;
+    } catch { /* keep last */ }
+    // then new events
+    try {
+      const r = await (await fetch(`/api/events?bridge=${encodeURIComponent(name)}&since=${rec.since}`)).json();
+      const evs = r.events || [];
+      if (evs.length) {
+        const atBottom = rec.feed.scrollHeight - rec.feed.scrollTop - rec.feed.clientHeight < 40;
+        evs.forEach(ev => rec.feed.appendChild(eventLine(ev)));
+        rec.since = r.since ?? rec.since;
+        if (atBottom) rec.feed.scrollTop = rec.feed.scrollHeight;   // follow tail unless user scrolled up
+      }
+    } catch { /* transient */ }
+  }
+
+  async function sendControl(name, kind, input) {
+    const val = input.value.trim();
+    if (!val) { input.focus(); return; }
+    const url = kind === "reply" ? "/api/reply" : "/api/interject";
+    const payload = kind === "reply" ? { answer: val } : { steer: val };
+    try {
+      const r = await fetch(`${url}?bridge=${encodeURIComponent(name)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      flash(input, j.ok ? "ok" : (j.error || "failed"));
+      if (j.ok) input.value = "";
+    } catch { flash(input, "error"); }
+  }
+  async function stopAgent(name, node) {
+    if (!confirm(`Stop agent "${name}"?`)) return;
+    try {
+      const j = await (await fetch(`/api/stop?bridge=${encodeURIComponent(name)}`, { method: "POST" })).json();
+      flash($(".panel-input", node), j.ok ? "stopped" : (j.error || "failed"));
+    } catch { /* ignore */ }
+  }
+  function flash(input, msg) {
+    const ph = input.placeholder; input.placeholder = msg; input.classList.add("flash");
+    setTimeout(() => { input.placeholder = ph; input.classList.remove("flash"); }, 1400);
+  }
+
+  // ---- draggable per-session status card -------------------------------------
+  const sc = $("#statusCard"), scHead = $("#scHead");
+  let scBridge = null, scPinned = false, scTimer = null;
+
+  function budgetClass(b) { return ({ GREEN: "s-running", AMBER: "s-idle", RED: "s-stopped" }[b] || "s-new"); }
+
+  async function renderStatusCard(name) {
+    let d;
+    try { d = await (await fetch(`/api/status/card?bridge=${encodeURIComponent(name)}`)).json(); }
+    catch { return; }
+    if (scBridge !== name) return;                 // hover moved on while fetching
+    $("#scTitle").textContent = name;
+    const stEl = $("#scState");
+    stEl.textContent = d.state || "?";
+    stEl.className = "sc-state " + stateClass(d.state);
+    $("#scBanner").textContent = d.banner || "";
+    // grouped, LOAD-BEARING first: what cartridge/model/mode is loaded + where it acts,
+    // then what the substrate is DOING (swarms/agents/tasks), then what it COSTS.
+    const fmtN = n => (n == null ? null : Number(n).toLocaleString());
+    const wsLabel = d.workspace ? (d.workspace_kind ? d.workspace_kind + " · " : "") + shortPath(d.workspace) : null;
+    const sections = [
+      ["context", [
+        ["scope", d.scope, "accent"],
+        ["model", d.model],
+        ["mode", d.mode, d.mode === "bypass" ? "stopped" : d.mode === "auto" ? "running" : "idle"],
+        ["workspace", wsLabel],
+        ["goal", d.goal],
+      ]],
+      ["substrate", [
+        ["bank", d.bank_atoms ? fmtN(d.bank_atoms) + " atoms" : null],
+        ["swarms", fmtN(d.swarms)],
+        ["agents", fmtN(d.agents)],
+        ["tasks", fmtN(d.tasks)],
+        ["step", fmtN(d.step)],
+        ["uptime", d.uptime],
+      ]],
+      ["cost", [
+        ["tokens", fmtN(d.tokens)],
+        ["est cost", "$" + Number(d.usd || 0).toFixed(4)],
+        ["budget", d.budget_status + (d.budget_cap ? " · cap $" + d.budget_cap : ""), budgetClass(d.budget_status)],
+        ["feeling", d.feeling],
+      ]],
+    ];
+    let html = "";
+    for (const [title, rows] of sections) {
+      const live = rows.filter(r => r[1] !== null && r[1] !== undefined && r[1] !== "" && r[1] !== "$0.0000" || r[0] === "est cost");
+      if (!live.length) continue;
+      html += `<div class="sc-sec">${title}</div>`;
+      html += live.map(([k, v, cls]) =>
+        `<div class="sc-row"><span class="sc-k">${k}</span><span class="sc-v${cls ? " s-" + cls : ""}">${escapeHtml(String(v))}</span></div>`
+      ).join("");
+    }
+    $("#scGrid").innerHTML = html;
+    // history path footer (the reference card's HISTORY PATH line)
+    if (d.history) $("#scGrid").innerHTML += `<div class="sc-hist" title="${escapeHtml(d.history)}">↳ ${escapeHtml(shortPath(d.history))}</div>`;
+  }
+  function shortPath(p) {
+    p = String(p).replace(/\\/g, "/");
+    const home = p.indexOf("/.echelon/");
+    if (home >= 0) return "~/.echelon" + p.slice(home + 9);
+    const parts = p.split("/"); return parts.length > 3 ? "…/" + parts.slice(-2).join("/") : p;
+  }
+
+  function showStatusCard(name, pin) {
+    if (scPinned && !pin && scBridge !== name) return;   // pinned to another: hover won't steal it
+    scBridge = name;
+    if (pin) scPinned = true;
+    sc.hidden = false;
+    if (!sc.style.left) { sc.style.left = "auto"; sc.style.right = "20px"; sc.style.top = "70px"; }
+    renderStatusCard(name);
+    clearInterval(scTimer);
+    scTimer = setInterval(() => { if (scBridge) renderStatusCard(scBridge); }, 2000);
+  }
+  function hideStatusCard() {
+    sc.hidden = true; scBridge = null; scPinned = false; clearInterval(scTimer);
+  }
+  $("#scClose").onclick = hideStatusCard;
+  $("#scPin").onclick = () => {
+    scPinned = !scPinned;
+    $("#scPin").classList.toggle("pinned", scPinned);
+    $("#scPin").title = scPinned ? "unpin (follow hover again)" : "pin (stop following hover)";
+  };
+
+  // drag by the header
+  (function makeDraggable() {
+    let dx = 0, dy = 0, dragging = false;
+    scHead.addEventListener("mousedown", e => {
+      if (e.target.closest(".sc-close, .sc-pin")) return;
+      dragging = true; scPinned = true; $("#scPin").classList.add("pinned");
+      const r = sc.getBoundingClientRect();
+      dx = e.clientX - r.left; dy = e.clientY - r.top;
+      sc.style.right = "auto";                       // switch to left/top positioning
+      document.body.style.userSelect = "none";
+    });
+    window.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      sc.style.left = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - dx)) + "px";
+      sc.style.top = Math.max(48, Math.min(window.innerHeight - 40, e.clientY - dy)) + "px";
+    });
+    window.addEventListener("mouseup", () => { dragging = false; document.body.style.userSelect = ""; });
+  })();
+
+  // ---- theme toggle ----------------------------------------------------------
+  const themeBtn = $("#themeBtn"), themeIcon = $(".theme-icon", themeBtn);
+  function applyThemeIcon() {
+    const t = document.documentElement.getAttribute("data-theme") || "dark";
+    themeIcon.textContent = t === "dark" ? "☾" : "☀";   // shows the CURRENT theme
+    themeBtn.title = t === "dark" ? "switch to light" : "switch to dark";
+  }
+  themeBtn.onclick = () => {
+    const cur = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("ec-theme", next); } catch (e) {}
+    applyThemeIcon();
+  };
+  applyThemeIcon();
+
+  // ---- composer: new session / society ---------------------------------------
+  const composer = $("#composer");
+  let cTab = "session", cMode = "auto", cForce = false, cPlan = null;
+
+  function openComposer() { composer.hidden = false; cForce = false; setTab("session"); checkWorkspace(); $("#cGoal").focus(); }
+  function closeComposer() { composer.hidden = true; $("#cMsg").textContent = ""; cPlan = null; }
+  function setTab(tab) {
+    cTab = tab;
+    document.querySelectorAll(".mtab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    document.querySelectorAll("[data-only]").forEach(el => {
+      const only = el.getAttribute("data-only");
+      el.hidden = (only === "session" && tab !== "session") || (only === "society" && tab !== "society");
+    });
+    $("#cForce").hidden = !cForce;                 // force only when a refusal happened
+    $("#cLaunch").textContent = tab === "society" ? "Launch society" : "Launch session";
+  }
+  document.querySelectorAll(".mtab").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  document.querySelectorAll(".mode-opt").forEach(b => b.onclick = () => {
+    cMode = b.dataset.mode;
+    document.querySelectorAll(".mode-opt").forEach(x => x.classList.toggle("active", x === b));
+  });
+
+  let wsTimer = null;
+  $("#cRoot").addEventListener("input", () => { clearTimeout(wsTimer); wsTimer = setTimeout(checkWorkspace, 350); });
+  async function checkWorkspace() {
+    const root = $("#cRoot").value.trim();
+    const el = $("#cWsInfo");
+    try {
+      const info = await (await fetch("/api/workspace/check", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ root }),
+      })).json();
+      el.className = "ws-info ws-" + (info.kind || "scratch");
+      el.textContent = info.note || info.error || "";
+      cForce = info.kind === "refused";
+      $("#cForce").hidden = !cForce;
+    } catch { el.textContent = ""; }
+  }
+  $("#cForce").onclick = async () => {
+    cForce = true; $("#cForce").classList.add("armed");
+    $("#cMsg").textContent = "forced — will use the repo directly. Launch to proceed.";
+  };
+
+  async function launchSession() {
+    const goal = $("#cGoal").value.trim();
+    if (!goal) { $("#cMsg").textContent = "goal required"; return; }
+    $("#cMsg").textContent = "launching…";
+    const body = { goal, root: $("#cRoot").value.trim() || null, mode: cMode, force_workspace: cForce };
+    try {
+      const r = await fetch("/api/new-session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!j.ok) {
+        $("#cMsg").textContent = j.error || "failed";
+        if (j.needs_workspace) { cForce = true; $("#cForce").hidden = false; }
+        return;
+      }
+      closeComposer();
+      refreshRoster();
+      openPanel(j.bridge);                          // jump straight into watching it
+    } catch (e) { $("#cMsg").textContent = "error: " + e; }
+  }
+
+  async function simulateSociety() {
+    const goal = $("#cGoal").value.trim(), folder = $("#cRoot").value.trim();
+    if (!goal || !folder) { $("#cMsg").textContent = "society needs a goal AND a folder"; return; }
+    $("#cWaves").textContent = "planning…";
+    try {
+      const j = await (await fetch("/api/workflow/run", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal, folder, dry_run: true }),
+      })).json();
+      cPlan = j.plan || null;
+      if (j.validation && j.validation !== "OK") { $("#cWaves").textContent = "invalid plan: " + JSON.stringify(j.validation); return; }
+      const waves = j.waves || [];
+      $("#cWaves").innerHTML = waves.length
+        ? waves.map((w, i) => `<div class="wave"><span class="wave-n">wave ${i}</span> ${w.map(s => `<span class="wave-step">${escapeHtml(typeof s === "string" ? s : (s.id || s.agent || "?"))}</span>`).join("")}</div>`).join("")
+        : "no waves produced";
+      $("#cMsg").textContent = `plan via ${escapeHtml(j.plan_source || "?")} — review, then Launch society`;
+    } catch (e) { $("#cWaves").textContent = "plan failed: " + e; }
+  }
+  async function launchSociety() {
+    const goal = $("#cGoal").value.trim(), folder = $("#cRoot").value.trim();
+    if (!goal || !folder) { $("#cMsg").textContent = "society needs a goal AND a folder"; return; }
+    $("#cMsg").textContent = "launching society…";
+    try {
+      const body = { goal, folder };
+      if (cPlan) body.plan = cPlan;                  // reuse the simulated plan if we have it
+      const j = await (await fetch("/api/workflow/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+      $("#cMsg").textContent = j.ok ? `society launched (${j.run_id || "running"})` : ("failed: " + JSON.stringify(j.validation || j.error));
+      if (j.ok) { setTimeout(() => { closeComposer(); refreshRoster(); }, 900); }
+    } catch (e) { $("#cMsg").textContent = "error: " + e; }
+  }
+
+  $("#newBtn").onclick = openComposer;
+  $("#composerClose").onclick = closeComposer;
+  composer.addEventListener("mousedown", e => { if (e.target === composer) closeComposer(); });
+  $("#cSimulate").onclick = simulateSociety;
+  $("#cLaunch").onclick = () => (cTab === "society" ? launchSociety() : launchSession());
+
+  // ---- boot ------------------------------------------------------------------
+  $("#refreshBtn").onclick = () => { refreshRoster(); refreshCost(); };
+  refreshRoster(); refreshCost();
+  setInterval(refreshRoster, ROSTER_MS);
+  setInterval(refreshCost, 15000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+{
+  "$contract": "swarm.lens_report",
+  "version": 1,
+  "title": "One lens worker's report",
+  "why": [
+    "THE SHAPE IS DECLARED ONCE, HERE. Before this file the shape lived in TWO places — a",
+    "prose description inside the prompt, and a regex that tried to scrape the shape back",
+    "out of the answer. The two drifted, and the regex could not express nesting: its",
+    "bare-JSON fallback used [^{}] which cannot cross a nested brace, so ANY unfenced",
+    "response carrying findings:[{...}] had every finding silently discarded and was",
+    "reported as '0 findings'. A worker that did its job perfectly read as a failed lens.",
+    "",
+    "Ingest is now KEY-BASED: the provider is asked for JSON (response_format), the object",
+    "is loaded, and fields are read BY KEY against this contract. No pattern matching on",
+    "model prose, so there is no shape to drift and nothing to silently drop.",
+    "",
+    "v2 (owner, 2026-08-18) — the `verdict` field replaces the `confidence` float.",
+    "A number is a FEELING a worker assigns itself; nothing downstream can check a 0.8.",
+    "CONFIRMED/PLAUSIBLE is a claim about WHAT THE WORKER DID, and `evidence` is where it",
+    "is checked. The point is the READER'S BUDGET: a gate that re-derives every finding at",
+    "equal depth costs as much as doing the work inline, and that cost is what makes people",
+    "skip the gate. Owner's words: 'verdict are hard truth fact. plausible are for the",
+    "hypothesis. this way the gate wont be everything.'",
+    "",
+    "THE RULE ITSELF IS NOT RESTATED HERE. It is declared ONCE as contract.VERDICT_LAW and",
+    "rendered into the prompt from there — a normative rule copied into two files drifts,",
+    "which is the same one-shape-two-places defect described above. (Found 2026-08-18 by a",
+    "swarm auditing this very contract; that finding was CONFIRMED and it was right.)"
+  ],
+  "response_format": "json_object",
+  "required": ["ok", "findings"],
+  "fields": {
+    "ok": {
+      "type": "bool",
+      "default": false,
+      "doc": "Did this lens complete its analysis? false means the lens could not run — NOT 'found nothing'."
+    },
+    "findings": {
+      "type": "list[object]",
+      "default": [],
+      "item": {
+        "required": ["title"],
+        "fields": {
+          "id":         {"type": "str",   "default": "",     "doc": "stable id within this lens, e.g. F-001"},
+          "verdict":    {"type": "enum",  "default": "PLAUSIBLE", "values": ["CONFIRMED", "PLAUSIBLE"],
+                         "doc": "THE VERDICT LAW. CONFIRMED = HARD TRUTH: you OPENED the file and read the lines, or RAN the command and saw the output, and `evidence` quotes it so a reader can check WITHOUT trusting you. PLAUSIBLE = HYPOTHESIS: inferred, pattern-matched, recalled, or read from a name/doc — then say in `evidence` what you did NOT check and the one command that would settle it. Only these two; no percentages, no 'likely'. ANY doubt downgrades. Do NOT speculate into CONFIRMED: a PLAUSIBLE that proves true costs the reader one command, a CONFIRMED that proves false costs it trust in every line you wrote. Defaults to PLAUSIBLE — an unlabelled claim is a hypothesis."},
+          "severity":   {"type": "enum",  "default": "LOW",  "values": ["HIGH", "MEDIUM", "LOW"]},
+          "category":   {"type": "enum",  "default": "other",
+                         "values": ["security", "performance", "architecture", "ux",
+                                    "reliability", "cost", "correctness", "other"]},
+          "title":      {"type": "str",   "default": "",     "doc": "one line, the claim alone"},
+          "detail":     {"type": "str",   "default": "",     "doc": "what is wrong and why it matters"},
+          "evidence":   {"type": "str",   "default": "",
+                         "doc": "CONFIRMED -> the command you RAN and its output, or the file:line and the quoted lines that prove it by themselves. PLAUSIBLE -> what you did NOT check, plus the one command that would settle it. Never quote output you did not actually see."},
+          "fix":        {"type": "str",   "default": "",     "doc": "concrete fix, or empty if this is an observation"}
+        }
+      }
+    },
+    "recommendations": {"type": "list[str]", "default": [], "doc": "ordered top actions"},
+    "risks":           {"type": "list[str]", "default": [], "doc": "what could go wrong with this plan"},
+    "next_actions":    {"type": "list[str]", "default": [], "doc": "what the agent should do after this swarm"},
+    "narrative":       {"type": "str",       "default": "",
+                        "doc": "one paragraph for the human. Carried as a FIELD, not as prose after the JSON — text outside the object is unaddressable and was previously scraped by a second regex."}
+  },
+  "example": {
+    "ok": true,
+    "findings": [
+      {
+        "id": "F-001",
+        "verdict": "CONFIRMED",
+        "severity": "HIGH",
+        "category": "correctness",
+        "title": "bare-JSON fallback cannot match nested objects",
+        "detail": "The [^{}] character class cannot cross a nested brace, so a response carrying findings:[{...}] never matches and all findings are dropped.",
+        "evidence": "RAN: echelon_engine/swarm/plan.py:_parse_response with input '{\"ok\":true,\"findings\":[{\"title\":\"t\"}]}' -> returned ok=false, findings=[]",
+        "fix": "Ask the provider for json_object and read fields by key against the contract."
+      },
+      {
+        "id": "F-002",
+        "verdict": "PLAUSIBLE",
+        "severity": "MEDIUM",
+        "category": "reliability",
+        "title": "a provider ignoring json_object may still fence its reply",
+        "detail": "If a fallback provider has no json_object mode, the body may arrive fenced and the tolerance branches carry the parse.",
+        "evidence": "NOT CHECKED — I did not exercise a non-json_object provider. Settle with: grep for response_format handling in the fallback provider path and run one lens against it.",
+        "fix": ""
+      }
+    ],
+    "recommendations": ["Declare the shape once and validate against it"],
+    "risks": ["A lens that fails silently reads as a lens that found nothing"],
+    "next_actions": ["Re-run the audit once ingest is key-based"],
+    "narrative": "The parser, not the model, was losing the findings."
+  }
+}
