@@ -272,6 +272,14 @@ someone follows.
 
 ---
 
+## Sponsoring
+
+ECHELON is built by one person and runs on paid model time. Sponsorship goes to compute for the
+public releases: the research corpus, the stranger-install gate, and the nightly bank hygiene.
+No tiers, no perks, no sponsor logos; the work is the receipt.
+
+[Sponsor on GitHub](https://github.com/sponsors/goravine)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go to the address in
